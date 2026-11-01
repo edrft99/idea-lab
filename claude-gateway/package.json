@@ -1,0 +1,8 @@
+{
+  "name": "idea-lab-claude-relay",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "node scripts/build.mjs"
+  }
+}
