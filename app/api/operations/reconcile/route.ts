@@ -1,4 +1,5 @@
 import { semanticCoordinator } from "@/lib/intelligence/semantic-access";
+import { attachmentService } from "@/lib/attachments/access";
 import { aiRequestStatus } from "@/lib/intelligence/service";
 import { assessmentService } from "@/lib/evaluations/proposal-access";
 import { proposalService } from "@/lib/proposals/access";
@@ -35,6 +36,16 @@ export async function POST(request: Request) {
       parsed.data.operationId,
       user.userId,
     );
+    if (operation.action === "attach-file")
+      return Response.json(
+        {
+          data: await attachmentService().status(
+            user.userId,
+            parsed.data.operationId,
+          ),
+        },
+        { headers: { "Cache-Control": "private, no-store" } },
+      );
     return Response.json(
       {
         data: operation.action.startsWith("semantic-")

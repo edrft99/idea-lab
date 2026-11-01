@@ -79,3 +79,7 @@ Six owner-authenticated MCP tools and a browser approval flow are deployed. See 
 ## Source control
 
 This repository is the canonical source for the private Idea Lab app (root) and its separate public OAuth transport (`claude-gateway/`). GitHub Actions runs tests, type checking and production builds on pushes and pull requests. It uploads commit-labelled release artifacts; artifact creation does not publish a Site. Changes should use branches and pull requests. Runtime secrets and Notion content are excluded. See [contributing](CONTRIBUTING.md) and [deployment](docs/deployment.md).
+
+## Images and files
+
+Saved idea details now include reviewed image/document attachments in Notion-managed storage, local image previews, refreshed file links and positive reconciliation for uncertain uploads. See [attachments](docs/attachments.md) for supported formats, limits, approval/recovery and rollout verification.
