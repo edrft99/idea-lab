@@ -264,6 +264,26 @@ export class Operations {
         409,
       );
   }
+  async pendingAttachments(actor: string, ideaId: string) {
+    return (
+      await this.db
+        .prepare(
+          "SELECT id,status,created_at FROM idea_lab_operations WHERE actor_hash=? AND action='attach-file' AND target=? AND status IN ('running','uncertain') ORDER BY created_at DESC LIMIT 10",
+        )
+        .bind(await digest(actor), ideaId)
+        .all<{ id: string; status: string; created_at: number }>()
+    ).results;
+  }
+  async confirmAttachment(id: string, blockId: string) {
+    const saved = await this.db
+      .prepare(
+        "UPDATE idea_lab_operations SET status='done',result_id=? WHERE id=? AND action='attach-file' AND status IN ('running','uncertain') RETURNING id",
+      )
+      .bind(blockId, id)
+      .first();
+    if (saved) await this.unlock(id);
+    return !!saved;
+  }
   async finishRunning(
     id: string,
     status: "done" | "failed",

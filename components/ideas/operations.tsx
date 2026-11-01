@@ -151,31 +151,33 @@ export function RecentSaves() {
           <div className="operation-row" key={op.id}>
             <div>
               <strong>
-                {op.action.startsWith("import-")
-                  ? op.action === "import-create"
-                    ? "Import capture"
-                    : "Import recovery"
-                  : op.action.startsWith("semantic-")
-                    ? (semanticLabels[op.action] ?? "Semantic operation")
-                    : ["ai-evaluate", "ai-extract"].includes(op.action)
-                      ? op.action === "ai-extract"
-                        ? "AI extraction request"
-                        : "AI assessment request"
-                      : isProposal(op.action)
-                        ? op.action.endsWith("-store")
-                          ? "Proposal storage"
-                          : "Proposal decision"
-                        : op.action === "merge-ideas"
-                          ? "Idea merge"
-                          : op.action === "related-link"
-                            ? "Related link"
-                            : op.action === "review-decision"
-                              ? "Review decision"
-                              : op.action.startsWith("evaluation-")
-                                ? "Evaluation"
-                                : op.action === "create"
-                                  ? "Capture"
-                                  : "Update"}{" "}
+                {op.action === "attach-file"
+                  ? "File attachment"
+                  : op.action.startsWith("import-")
+                    ? op.action === "import-create"
+                      ? "Import capture"
+                      : "Import recovery"
+                    : op.action.startsWith("semantic-")
+                      ? (semanticLabels[op.action] ?? "Semantic operation")
+                      : ["ai-evaluate", "ai-extract"].includes(op.action)
+                        ? op.action === "ai-extract"
+                          ? "AI extraction request"
+                          : "AI assessment request"
+                        : isProposal(op.action)
+                          ? op.action.endsWith("-store")
+                            ? "Proposal storage"
+                            : "Proposal decision"
+                          : op.action === "merge-ideas"
+                            ? "Idea merge"
+                            : op.action === "related-link"
+                              ? "Related link"
+                              : op.action === "review-decision"
+                                ? "Review decision"
+                                : op.action.startsWith("evaluation-")
+                                  ? "Evaluation"
+                                  : op.action === "create"
+                                    ? "Capture"
+                                    : "Update"}{" "}
                 · {op.status}
               </strong>
               <small>{new Date(op.created_at).toLocaleString()}</small>
@@ -223,7 +225,13 @@ export function RecentSaves() {
                       : "Resume approved related links"}
                 </button>
               )}
+            {op.action === "attach-file" && op.target && (
+              <Link className="text-link" href={"/ideas/" + op.target}>
+                Open idea attachments
+              </Link>
+            )}
             {op.result_id &&
+              op.action !== "attach-file" &&
               !op.action.startsWith("semantic-") &&
               !["ai-evaluate", "ai-extract"].includes(op.action) && (
                 <Link

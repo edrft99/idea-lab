@@ -11,6 +11,7 @@ import {
 import type { IdeaDetail } from "@/lib/ideas/domain";
 import { useResource } from "./use-resource";
 import { Failure, Loading } from "./states";
+import { Attachments } from "./attachments";
 export function Detail({ id }: { id: string }) {
   const { data, error, loading, refresh, stale } = useResource<IdeaDetail>(
       "/api/ideas/" + id,
@@ -126,6 +127,12 @@ export function Detail({ id }: { id: string }) {
                   </div>
                 ))}
               </section>
+              <Attachments
+                key={idea.id}
+                ideaId={idea.id}
+                readOnly={!!idea.canonicalIdeaId}
+                onSaved={refresh}
+              />
               <section className="panel prose-panel">
                 <h2>Current score breakdown</h2>
                 <dl>
