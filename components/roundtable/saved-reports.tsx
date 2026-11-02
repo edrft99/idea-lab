@@ -1,6 +1,11 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
-import { Save, CheckCircle2, RefreshCw, X, ExternalLink } from "lucide-react";
+import {
+  CheckCircle2,
+  RefreshCw,
+  ExternalLink,
+  LoaderCircle,
+} from "lucide-react";
 import {
   useResource,
   requestData,
@@ -9,50 +14,49 @@ import {
 import type { Idea } from "@/lib/ideas/domain";
 import {
   resultSchema,
-  dimensions,
-  labels,
   provisionalScore,
   type RoundtableResult,
 } from "@/lib/roundtable/model";
-import type { SavedReport } from "@/lib/roundtable/reports";
-type Approval = {
-  approvalToken: string;
-  expiresAt: string;
-  result: RoundtableResult;
-};
+import type { SavedReport, AutoSaveResult } from "@/lib/roundtable/reports";
 export function SavedReports({
   idea,
   result,
   busy,
+  storage,
   onLoad,
   onBusyChange,
 }: {
   idea: Idea;
   result: RoundtableResult | null;
   busy: boolean;
+  storage: AutoSaveResult | null;
   onLoad: (result: RoundtableResult) => void;
   onBusyChange: (busy: boolean) => void;
 }) {
   const history = useResource<SavedReport[]>(
     "/api/roundtable/reports?ideaId=" + idea.id,
   );
-  const [approval, setApproval] = useState<Approval | null>(null),
-    [confirmed, setConfirmed] = useState<SavedReport | null>(null),
+  const [local, setLocal] = useState<{
+      runId: string;
+      state: AutoSaveResult;
+    } | null>(null),
     [working, setWorking] = useState(false),
-    [uncertain, setUncertain] = useState(false),
     [error, setError] = useState("");
-  useEffect(() => {
-    onBusyChange(working || !!approval || uncertain);
-  }, [working, approval, uncertain, onBusyChange]);
   const guard = useRef(false),
+    attempted = useRef(new Set<string>()),
     load = useRef(onLoad);
   load.current = onLoad;
+  const state = local?.runId === result?.runId ? local?.state : storage;
   const saved = result
-    ? confirmed?.snapshot.result.runId === result.runId
-      ? confirmed
+    ? state?.status === "saved" &&
+      state.report.snapshot.result.runId === result.runId
+      ? state.report
       : history.data?.find((row) => row.snapshot.result.runId === result.runId)
     : null;
   const stale = !!result && result.input.inputRevision !== idea.revision;
+  useEffect(() => {
+    onBusyChange(working);
+  }, [working, onBusyChange]);
   useEffect(() => {
     if (!result && !busy && history.data?.length) {
       const current =
@@ -62,92 +66,86 @@ export function SavedReports({
       load.current(resultSchema.parse(current.snapshot.result));
     }
   }, [history.data, result, busy, idea.revision]);
-  async function review() {
+  async function persist() {
     if (!result || guard.current || busy) return;
     guard.current = true;
+    attempted.current.add(result.runId);
     setWorking(true);
     setError("");
+    const current = result;
     try {
-      const response = await requestData<Approval | { report: SavedReport }>(
-        "/api/roundtable/reports/prepare",
-        { method: "POST", body: JSON.stringify(result) },
+      const response = await requestData<AutoSaveResult>(
+        "/api/roundtable/reports/auto-save",
+        { method: "POST", body: JSON.stringify(current) },
       );
-      if ("report" in response) {
-        setConfirmed(response.report);
-        history.refresh();
-      } else setApproval(response);
+      setLocal({ runId: current.runId, state: response });
+      if (response.status === "saved") history.refresh();
     } catch (e) {
-      setError(
-        e instanceof Error
-          ? e.message
-          : "The report could not be reviewed for saving.",
-      );
-    } finally {
-      guard.current = false;
-      setWorking(false);
-    }
-  }
-  async function save() {
-    if (!approval || guard.current) return;
-    guard.current = true;
-    setWorking(true);
-    setError("");
-    try {
-      const response = await requestData<{ report: SavedReport }>(
-        "/api/roundtable/reports/commit",
-        {
-          method: "POST",
-          body: JSON.stringify({
-            result: approval.result,
-            approvalToken: approval.approvalToken,
-          }),
+      setLocal({
+        runId: current.runId,
+        state: {
+          status:
+            !(e instanceof ApiFailure) || e.uncertain ? "uncertain" : "failed",
+          operationId: null,
+          message:
+            e instanceof Error
+              ? e.message
+              : "Automatic saving could not be confirmed.",
         },
-      );
-      setConfirmed(response.report);
-      setApproval(null);
-      setUncertain(false);
-      history.refresh();
-    } catch (e) {
-      const unknown =
-        !(e instanceof ApiFailure) ||
-        e.uncertain ||
-        e.code === "RECONCILIATION_REQUIRED";
-      setUncertain(unknown);
-      if (!unknown) setApproval(null);
-      setError(
-        e instanceof Error
-          ? e.message
-          : "Notion did not confirm this save. Check status.",
-      );
+      });
     } finally {
       guard.current = false;
       setWorking(false);
     }
   }
+  useEffect(() => {
+    if (
+      result &&
+      !busy &&
+      !saved &&
+      !state &&
+      (history.data || history.error) &&
+      !attempted.current.has(result.runId)
+    )
+      void persist();
+  }, [result, busy, saved, state, history.data, history.error]);
   async function check() {
-    if (!approval || guard.current) return;
+    if (!result || guard.current) return;
     guard.current = true;
     setWorking(true);
     setError("");
+    const current = result;
     try {
       const response = await requestData<{
         status: string;
         report: SavedReport | null;
       }>("/api/roundtable/reports/status", {
         method: "POST",
-        body: JSON.stringify({ approvalToken: approval.approvalToken }),
+        body: JSON.stringify(
+          state?.status !== "saved" && state?.operationId
+            ? { operationId: state.operationId }
+            : { result: current },
+        ),
       });
       if (response.report) {
-        setConfirmed(response.report);
-        setUncertain(false);
-        setApproval(null);
+        setLocal({
+          runId: current.runId,
+          state: { status: "saved", report: response.report },
+        });
         history.refresh();
       } else if (["failed", "pending"].includes(response.status)) {
-        setUncertain(false);
-        setApproval(null);
+        setLocal({
+          runId: current.runId,
+          state: {
+            status: "failed",
+            operationId: null,
+            message:
+              "This save was not completed. Retry automatic saving; GPT will not run again.",
+          },
+        });
       } else
         setError(
-          "This save remains unconfirmed. No write was repeated. Check Recent saves in Settings after a reload.",
+          "Saving is still unconfirmed. No write was repeated. Check Recent saves in Settings after a reload.",
         );
     } catch (e) {
       setError(
@@ -158,6 +156,7 @@ export function SavedReports({
       setWorking(false);
     }
   }
+  const pending = !!result && !saved && (!state || working);
   return (
     <section
       className="panel rt-saved-reports"
@@ -171,34 +170,27 @@ export function SavedReports({
                 <CheckCircle2 size={18} />
                 Saved to Notion
               </>
-            ) : result ? (
+            ) : pending ? (
               <>
-                <Save size={18} />
-                Assessment not saved yet
+                <LoaderCircle size={18} className="rt-spin" />
+                Saving assessment…
               </>
+            ) : result ? (
+              "Automatic save needs attention"
             ) : (
               "Saved assessments"
             )}
           </h2>
           <p>
             {saved
-              ? "This report will load when you reopen this idea. Your active idea score is unchanged."
-              : result
-                ? "Save this report to keep its scores and evidence after leaving or refreshing the page."
-                : "Saved GPT reports appear here when you reopen an idea."}
+              ? "Automatically saved. This report will load when you reopen the idea; your active idea score is unchanged."
+              : pending
+                ? "Keeping this assessment’s scores, evidence and brief in Notion. No extra approval is needed."
+                : result
+                  ? "GPT completed, but its report is not confirmed saved. Retry or check storage only; GPT will not run again."
+                  : "Completed GPT assessments save automatically and appear here when you reopen an idea."}
           </p>
         </div>
-        {result && !saved && !approval && (
-          <button
-            type="button"
-            className="site-primary"
-            disabled={working || busy || stale}
-            onClick={review}
-          >
-            <Save size={15} />
-            {working ? "Preparing…" : "Save assessment"}
-          </button>
-        )}
         {saved?.url && (
           <a
             href={saved.url}
@@ -210,6 +202,22 @@ export function SavedReports({
           </a>
         )}
       </div>
+      {result && !saved && state && state.status !== "saved" && !working && (
+        <div className="rt-save-warning">
+          <p>{state.message}</p>
+          <button
+            type="button"
+            className="site-secondary"
+            disabled={busy}
+            onClick={state.status === "uncertain" ? check : persist}
+          >
+            <RefreshCw size={14} />
+            {state.status === "uncertain"
+              ? "Check save status"
+              : "Retry automatic save"}
+          </button>
+        </div>
+      )}
       {stale && (
         <p className="rt-save-warning">
           This report was based on an earlier version of the idea. Its scores
@@ -220,7 +228,7 @@ export function SavedReports({
         <div role="alert" className="rt-save-warning">
           Saved history could not be loaded: {history.error.message}{" "}
           <button type="button" className="text-link" onClick={history.refresh}>
-            Retry
+            Retry history
           </button>
         </div>
       )}
@@ -233,7 +241,7 @@ export function SavedReports({
         <label className="rt-history-picker">
           View a saved assessment
           <select
-            disabled={busy || working || !!approval}
+            disabled={busy || working}
             value={
               history.data.some(
                 (row) => row.snapshot.result.runId === result?.runId,
@@ -250,7 +258,7 @@ export function SavedReports({
             }}
           >
             <option value="" disabled>
-              Current unsaved assessment
+              Current assessment
             </option>
             {history.data.map((report) => (
               <option key={report.id} value={report.snapshot.result.runId}>
@@ -264,71 +272,6 @@ export function SavedReports({
             ))}
           </select>
         </label>
-      )}
-      {approval && !uncertain && (
-        <div className="rt-save-review">
-          <h3>Review this assessment save</h3>
-          <p>
-            Save the exact report below to Notion’s review database, linked to
-            this idea. It includes the selected brief, scores, evidence,
-            suggestions and model provenance. This does not replace the idea’s
-            active score or run GPT again.
-          </p>
-          <div className="rt-save-score-summary">
-            {dimensions.map((key) => (
-              <span key={key}>
-                {labels[key]}{" "}
-                <strong>
-                  {approval.result.assessment.ratings[key].score ?? "Unknown"}
-                </strong>
-              </span>
-            ))}
-          </div>
-          <details>
-            <summary>Full report being saved</summary>
-            <pre>{JSON.stringify(approval.result, null, 2)}</pre>
-          </details>
-          <p>
-            Approval expires {new Date(approval.expiresAt).toLocaleString()}.
-          </p>
-          <div className="action-row">
-            <button
-              type="button"
-              className="site-secondary"
-              disabled={working}
-              onClick={() => setApproval(null)}
-            >
-              <X size={14} />
-              Cancel
-            </button>
-            <button
-              type="button"
-              className="site-primary"
-              disabled={working}
-              onClick={save}
-            >
-              <Save size={14} />
-              {working ? "Saving…" : "Confirm save to Notion"}
-            </button>
-          </div>
-        </div>
-      )}
-      {uncertain && (
-        <div className="rt-save-review">
-          <p>
-            Notion may already have saved this assessment. Check status instead
-            of submitting it again. After a reload, use Settings → Recent saves.
-          </p>
-          <button
-            type="button"
-            className="site-secondary"
-            disabled={working}
-            onClick={check}
-          >
-            <RefreshCw size={14} />
-            {working ? "Checking…" : "Check save status"}
-          </button>
-        </div>
       )}
       {error && (
         <p role="alert" className="rt-save-warning">

@@ -151,7 +151,7 @@ export function RecentSaves() {
           <div className="operation-row" key={op.id}>
             <div>
               <strong>
-                {op.action === "roundtable-save"
+                {["roundtable-save", "roundtable-autosave"].includes(op.action)
                   ? "Roundtable assessment save"
                   : op.action === "attach-file"
                     ? "File attachment"
@@ -254,7 +254,9 @@ export function RecentSaves() {
                       ? reviewPath(op.action) + op.result_id
                       : op.action === "review-decision"
                         ? "/review/" + op.result_id
-                        : op.action === "roundtable-save"
+                        : ["roundtable-save", "roundtable-autosave"].includes(
+                              op.action,
+                            )
                           ? "/ideas/" + op.target + "/roundtable"
                           : "/ideas/" +
                             (op.action.startsWith("evaluation-")
@@ -266,7 +268,9 @@ export function RecentSaves() {
                     ? "Open saved proposal"
                     : op.action === "review-decision"
                       ? "Open saved decision"
-                      : op.action === "roundtable-save"
+                      : ["roundtable-save", "roundtable-autosave"].includes(
+                            op.action,
+                          )
                         ? "Open saved assessment"
                         : "Open saved idea"}
                 </Link>

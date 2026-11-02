@@ -34,13 +34,34 @@ function setup(overrides = {}) {
       usage: null,
     }),
   };
+  const reports = {
+    preflight: vi.fn().mockResolvedValue(undefined),
+    autoSave: vi.fn().mockImplementation(async (result: any) => ({
+      status: "saved" as const,
+      report: {
+        id: "70000000-0000-4000-8000-000000000007",
+        url: null,
+        snapshot: {
+          format: "idea-lab-roundtable-report" as const,
+          version: 1 as const,
+          operation: "e".repeat(64),
+          ownerHash: "f".repeat(64),
+          approvedAt: new Date().toISOString(),
+          resultHash: "d".repeat(64),
+          result,
+        },
+      },
+    })),
+    findGenerated: vi.fn().mockResolvedValue(null),
+  };
   const service = new RoundtableService(
     { ...gptConfig, ...overrides },
     repo,
     ops,
     provider,
+    reports,
   );
-  return { service, provider, repo, ops, db };
+  return { service, provider, reports, repo, ops, db };
 }
 describe("roundtable GPT first reviewer", () => {
   it("prepares without a provider call, dispatches once, computes scores outside the model and retains only hashes", async () => {
@@ -90,7 +111,7 @@ describe("roundtable GPT first reviewer", () => {
     expect(provider.evaluate).not.toHaveBeenCalled();
   });
   it("binds approval to model, policy and credentials", async () => {
-    const { service, provider, repo, ops } = setup();
+    const { service, provider, reports, repo, ops } = setup();
     const receipt = await service.prepare(command, "owner");
     for (const change of [
       { key: "rotated-key" },
@@ -102,6 +123,7 @@ describe("roundtable GPT first reviewer", () => {
         repo,
         ops,
         provider,
+        reports,
       );
       await expect(
         changed.execute(command, receipt.approvalToken, "owner"),
@@ -274,5 +296,16 @@ describe("documented GPT Responses transport", () => {
     expect(() =>
       checkedOpenAIConfig({ ...gptConfig, timeoutMs: 100000 }),
     ).toThrow();
+  });
+});
+
+describe("automatic report storage preflight", () => {
+  it("checks Notion readiness before issuing a new GPT request", async () => {
+    const { service, reports, provider } = setup();
+    reports.preflight.mockRejectedValue(new Error("Storage is unavailable"));
+    await expect(service.prepare(command, "owner")).rejects.toThrow(
+      "Storage is unavailable",
+    );
+    expect(provider.evaluate).not.toHaveBeenCalled();
   });
 });

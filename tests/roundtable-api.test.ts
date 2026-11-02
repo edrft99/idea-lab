@@ -1,3 +1,4 @@
+import { POST as autoSave } from "../app/api/roundtable/reports/auto-save/route";
 import { POST as savePrepare } from "../app/api/roundtable/reports/prepare/route";
 import { POST as saveCommit } from "../app/api/roundtable/reports/commit/route";
 import { POST as saveStatus } from "../app/api/roundtable/reports/status/route";
@@ -31,7 +32,15 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 describe("roundtable API boundary", () => {
-  it.each([prepare, commit, status, savePrepare, saveCommit, saveStatus])(
+  it.each([
+    prepare,
+    commit,
+    status,
+    savePrepare,
+    saveCommit,
+    saveStatus,
+    autoSave,
+  ])(
     "requires the owner, same origin and a strict payload before accessing GPT",
     async (handler) => {
       const fetcher = vi.spyOn(globalThis, "fetch");

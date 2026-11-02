@@ -176,8 +176,8 @@ export function ReviewerAssessment({
         Download GPT report
       </button>
       <p className="rt-agent-score-note">
-        This assessment has not changed your idea or saved score. Panel
-        consensus follows cross-review.
+        These provisional report scores do not replace your idea’s active
+        ranking. Panel consensus follows cross-review.
       </p>
     </div>
   );

@@ -1,3 +1,4 @@
+import type { AutoSaveResult, RoundtableReportService } from "./reports";
 import { AppError } from "../ideas/errors";
 import { digest, Operations } from "../ideas/operations";
 import { NotionRepository } from "../ideas/notion";
@@ -26,6 +27,10 @@ export class RoundtableService {
     private repository: NotionRepository,
     private operations: Operations,
     private provider: Pick<GPTReviewer, "evaluate">,
+    private reports: Pick<
+      RoundtableReportService,
+      "preflight" | "autoSave" | "findGenerated"
+    >,
     private secrets: string[] = [],
   ) {
     this.config =
@@ -54,6 +59,7 @@ export class RoundtableService {
       JSON.stringify([
         aiProfile(this.config, promptVersion),
         await digest(this.config.key),
+        "generate-and-save-report-v1",
       ]),
     );
   }
@@ -75,6 +81,7 @@ export class RoundtableService {
   async prepare(input: RoundtableRequest, actor: string) {
     const command = this.normalized(input);
     await this.current(command);
+    await this.reports.preflight();
     const receipt = await this.operations.issue(
       actor,
       await digest(JSON.stringify(command)),
@@ -86,7 +93,10 @@ export class RoundtableService {
       approvalToken: receipt.token,
       expiresAt: new Date(receipt.expires).toISOString(),
       command,
-      profile: aiProfile(this.config, promptVersion),
+      profile: {
+        ...aiProfile(this.config, promptVersion),
+        autoSaveReport: true,
+      },
     };
   }
   async execute(
@@ -109,12 +119,23 @@ export class RoundtableService {
         "The content or GPT connection changed. Review the request again.",
         409,
       );
-    if (op.status === "done")
+    if (op.status === "done") {
+      const report = await this.reports.findGenerated(
+        command.ideaId,
+        op.id,
+        actor,
+      );
+      if (report)
+        return {
+          result: report.snapshot.result,
+          storage: { status: "saved", report } as AutoSaveResult,
+        };
       throw new AppError(
         "AI_RESULT_NOT_RETAINED",
-        "GPT already completed this request. Use the original result or its download. It will not be sent again.",
+        "GPT already completed this request. Check saved history; this request will not run GPT again.",
         409,
       );
+    }
     await this.operations.claim(op, hash, [
       "ai-budget:" + (await digest(actor)),
     ]);
@@ -158,7 +179,18 @@ export class RoundtableService {
         "done",
         await digest(JSON.stringify(result)),
       );
-      return { result };
+      let storage: AutoSaveResult;
+      try {
+        storage = await this.reports.autoSave(result, actor);
+      } catch {
+        storage = {
+          status: "failed",
+          operationId: null,
+          message:
+            "GPT completed, but saving to Notion could not be confirmed. The assessment is available below; GPT will not be run again.",
+        };
+      }
+      return { result, storage };
     } catch (error) {
       try {
         await this.operations.finishRoundtableRequest(
@@ -182,14 +214,31 @@ export async function roundtableRequestStatus(
   operations: Operations,
   token: string,
   actor: string,
+  reports?: Pick<RoundtableReportService, "findGenerated">,
+  byId = false,
 ) {
-  const op = await operations.read(token, actor);
+  const op = byId
+    ? await operations.readById(token, actor)
+    : await operations.read(token, actor);
   if (op.action !== "roundtable-gpt")
     throw new AppError(
       "INVALID_OPERATION",
       "This is not a GPT roundtable request.",
       400,
     );
+  const report =
+    op.status === "done" && reports
+      ? await reports.findGenerated(op.target!, op.id, actor)
+      : null;
+  if (report)
+    return {
+      status: "done",
+      resultRetained: true,
+      result: report.snapshot.result,
+      storage: { status: "saved", report } as AutoSaveResult,
+      message:
+        "The assessment was automatically saved to Notion and has been recovered without another GPT request.",
+    };
   return {
     status: op.status,
     resultRetained: false,

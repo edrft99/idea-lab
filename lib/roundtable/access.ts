@@ -22,7 +22,7 @@ export function gptProfile(config = gptConfig()) {
   return {
     ...aiProfile(config, promptVersion),
     localRetention:
-      "The assessment stays in this browser until downloaded or explicitly saved to Notion. The operation ledger retains hashes and request status, not idea excerpts or generated text.",
+      "Completed assessments are automatically saved to Notion. The operation ledger retains hashes and request status; Notion retains the full report and selected brief.",
   };
 }
 export function roundtableService() {
@@ -39,6 +39,7 @@ export function roundtableService() {
     new NotionRepository(notionConfig()),
     new Operations(operationalDB()),
     new GPTReviewer(config, fetch, secrets),
+    roundtableReportService(),
     secrets,
   );
 }

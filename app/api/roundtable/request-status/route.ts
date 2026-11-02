@@ -1,3 +1,4 @@
+import { roundtableReportService } from "@/lib/roundtable/access";
 import { z } from "zod";
 import { authorizeOwner, checkOrigin, jsonBody } from "@/lib/ideas/access";
 import { AppError, errorResponse } from "@/lib/ideas/errors";
@@ -25,6 +26,7 @@ export async function POST(request: Request) {
           new Operations(operationalDB()),
           parsed.data.approvalToken,
           user.userId,
+          roundtableReportService(),
         ),
       },
       { headers: { "Cache-Control": "private, no-store" } },

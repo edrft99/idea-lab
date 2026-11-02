@@ -1,5 +1,6 @@
 "use client";
 import { SavedReports } from "./saved-reports";
+import type { AutoSaveResult } from "@/lib/roundtable/reports";
 import { useRef, useState } from "react";
 import { ReviewerAssessment } from "./reviewer-assessment";
 import { VendorMark, type ReviewerId } from "./vendor-mark";
@@ -168,6 +169,7 @@ function Roundtable({ idea }: { idea?: Idea }) {
     [criteria, setCriteria] = useState(""),
     [constraints, setConstraints] = useState("");
   const [saving, setSaving] = useState(false);
+  const [storage, setStorage] = useState<AutoSaveResult | null>(null);
   const [busy, setBusy] = useState(false),
     [receipt, setReceipt] = useState<Receipt | null>(null),
     [result, setResult] = useState<RoundtableResult | null>(null),
@@ -240,23 +242,27 @@ function Roundtable({ idea }: { idea?: Idea }) {
     setError("");
     setMessage("");
     setResult(null);
+    setStorage(null);
     setRestored(false);
     try {
-      const response = await requestData<{ result: RoundtableResult }>(
-        "/api/roundtable/commit",
-        {
-          method: "POST",
-          body: JSON.stringify({
-            command: receipt.command,
-            approvalToken: receipt.approvalToken,
-          }),
-        },
-      );
+      const response = await requestData<{
+        result: RoundtableResult;
+        storage: AutoSaveResult;
+      }>("/api/roundtable/commit", {
+        method: "POST",
+        body: JSON.stringify({
+          command: receipt.command,
+          approvalToken: receipt.approvalToken,
+        }),
+      });
       setResult(resultSchema.parse(response.result));
+      setStorage(response.storage);
       setReceipt(null);
       setSelected("gpt");
       setMessage(
-        "GPT’s assessment is ready but not saved yet. Choose Save assessment to keep it in Notion.",
+        response.storage?.status === "saved"
+          ? "GPT’s assessment is ready and automatically saved to Notion."
+          : "GPT’s assessment is ready. Automatic saving needs attention below; GPT will not be run again.",
       );
     } catch (e) {
       const unknown =
@@ -281,14 +287,23 @@ function Roundtable({ idea }: { idea?: Idea }) {
     setBusy(true);
     setError("");
     try {
-      const response = await requestData<{ status: string; message: string }>(
-        "/api/roundtable/request-status",
-        {
-          method: "POST",
-          body: JSON.stringify({ approvalToken: receipt.approvalToken }),
-        },
-      );
+      const response = await requestData<{
+        status: string;
+        message: string;
+        result?: RoundtableResult;
+        storage?: AutoSaveResult;
+      }>("/api/roundtable/request-status", {
+        method: "POST",
+        body: JSON.stringify({ approvalToken: receipt.approvalToken }),
+      });
       setMessage(response.message);
+      if (response.result) {
+        setResult(resultSchema.parse(response.result));
+        setStorage(response.storage ?? null);
+        setUncertain(false);
+        setReceipt(null);
+        return;
+      }
       setChecked(["done", "uncertain"].includes(response.status));
       if (["failed", "pending"].includes(response.status)) {
         setUncertain(false);
@@ -332,6 +347,7 @@ function Roundtable({ idea }: { idea?: Idea }) {
           "This result belongs to a different idea or an older revision. Open the matching idea before loading it.",
         );
       setResult(loaded);
+      setStorage(null);
       setRestored(true);
       setSelected("gpt");
       setMessage(
@@ -407,9 +423,11 @@ function Roundtable({ idea }: { idea?: Idea }) {
           idea={idea}
           onBusyChange={setSaving}
           result={result}
+          storage={storage}
           busy={busy || !!receipt || uncertain}
           onLoad={(saved) => {
             setResult(saved);
+            setStorage(null);
             setRestored(false);
             setSelected("gpt");
             if (saved.input.inputRevision === idea.revision) {
@@ -838,9 +856,9 @@ function Roundtable({ idea }: { idea?: Idea }) {
                       <br />
                       {receipt.profile.requestStorage}
                       <br />
-                      Results remain in this browser until you download them or
-                      save the assessment to Notion. The server ledger stores
-                      request status and hashes only.
+                      Completed reports, their selected brief and model
+                      provenance are automatically saved to Notion. The server
+                      ledger stores request status and hashes only.
                     </dd>
                   </div>
                   <div>
@@ -861,9 +879,9 @@ function Roundtable({ idea }: { idea?: Idea }) {
                   )}
                 </pre>
                 <p>
-                  No Notion record, idea text or active ranking will change.
-                  This first release returns GPT’s independent assessment; peer
-                  discussion comes later.
+                  GPT’s completed assessment will be automatically saved to
+                  Notion. There is no extra save step. Idea text and active
+                  ranking remain unchanged; peer discussion comes later.
                 </p>
                 <div className="action-row">
                   <button
@@ -886,7 +904,9 @@ function Roundtable({ idea }: { idea?: Idea }) {
                     ) : (
                       <ShieldCheck size={15} />
                     )}{" "}
-                    {busy ? "GPT is reviewing…" : "Approve & send to GPT"}
+                    {busy
+                      ? "GPT is reviewing & saving…"
+                      : "Approve & send to GPT"}
                   </button>
                 </div>
               </section>

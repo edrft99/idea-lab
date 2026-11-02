@@ -14,6 +14,7 @@ export const savedSnapshotSchema = z
     approvedAt: z.string().datetime({ offset: true }),
     resultHash: hash,
     result: resultSchema,
+    storageMode: z.enum(["automatic", "reviewed"]).optional(),
   })
   .strict();
 export type SavedSnapshot = z.infer<typeof savedSnapshotSchema>;
@@ -22,6 +23,13 @@ export type SavedReport = {
   url: string | null;
   snapshot: SavedSnapshot;
 };
+export type AutoSaveResult =
+  | { status: "saved"; report: SavedReport }
+  | {
+      status: "failed" | "uncertain";
+      operationId: string | null;
+      message: string;
+    };
 const types = {
   Name: "title",
   "Candidate Idea": "relation",
@@ -187,7 +195,9 @@ export class RoundtableReports extends NotionRepository {
           object: "block",
           type: "paragraph",
           paragraph: richText(
-            "Saved GPT roundtable assessment. Viability scores and evidence are preserved in the snapshot; the idea’s active score is unchanged.",
+            snapshot.storageMode === "automatic"
+              ? "Automatically saved GPT report. Model findings remain unapproved; the idea’s active score is unchanged."
+              : "Saved GPT roundtable assessment. Viability scores and evidence are preserved in the snapshot; the idea’s active score is unchanged.",
           ),
         },
         {
@@ -243,31 +253,102 @@ export class RoundtableReportService {
         409,
       );
   }
-  private async current(result: RoundtableResult) {
+  private async current(result: RoundtableResult, automatic = false) {
     const idea = await this.repository.get(result.input.ideaId);
-    if (idea.canonicalIdeaId || idea.revision !== result.input.inputRevision)
+    if (
+      !automatic &&
+      (idea.canonicalIdeaId || idea.revision !== result.input.inputRevision)
+    )
       throw new AppError(
         "STALE_IDEA",
         "This idea changed since the assessment. Saved history can still be viewed, but generate a current assessment before saving a new report.",
         409,
       );
   }
+  private async confirmStored(report: SavedReport, actor: string) {
+    const op = await this.operations.readById(report.snapshot.operation, actor);
+    if (
+      !["roundtable-save", "roundtable-autosave"].includes(op.action) ||
+      op.target !== report.snapshot.result.input.ideaId ||
+      op.payload_hash !== report.snapshot.resultHash ||
+      !["running", "uncertain", "done"].includes(op.status) ||
+      (op.status === "done" && op.result_id !== report.id)
+    )
+      throw new AppError(
+        "ROUNDTABLE_REPORT_INVALID",
+        "This report does not match its storage operation.",
+        409,
+      );
+    if (op.status !== "done")
+      await this.operations.finish(op.id, "done", report.id);
+  }
   async list(ideaId: string, actor: string) {
     const reports = await this.repository.listReports(ideaId, actor);
-    for (const report of reports)
+    for (const report of reports) {
       await this.proof(report.snapshot.result, actor);
+      await this.confirmStored(report, actor);
+    }
     return reports;
   }
-  async prepare(input: RoundtableResult, actor: string) {
+  async preflight() {
+    await this.repository.preflight();
+  }
+  async findGenerated(ideaId: string, runId: string, actor: string) {
+    const matches = (await this.list(ideaId, actor)).filter(
+      (report) => report.snapshot.result.runId === runId,
+    );
+    if (matches.length > 1)
+      throw new AppError(
+        "RECONCILIATION_REQUIRED",
+        "Multiple reports reference this GPT run.",
+        409,
+      );
+    return matches[0] ?? null;
+  }
+  async autoSave(
+    input: RoundtableResult,
+    actor: string,
+  ): Promise<AutoSaveResult> {
+    let operationId: string | null = null;
+    try {
+      const approval = await this.prepare(input, actor, true);
+      if (approval.report) {
+        await this.confirmStored(approval.report, actor);
+        return { status: "saved", report: approval.report };
+      }
+      operationId = await digest(approval.approvalToken);
+      const { report } = await this.commit(
+        input,
+        approval.approvalToken,
+        actor,
+        true,
+      );
+      return { status: "saved", report };
+    } catch (error) {
+      return {
+        status:
+          error instanceof AppError &&
+          (error.uncertain || error.code === "RECONCILIATION_REQUIRED")
+            ? "uncertain"
+            : "failed",
+        operationId,
+        message:
+          error instanceof AppError
+            ? error.message
+            : "The report could not be saved. GPT will not be run again.",
+      };
+    }
+  }
+  async prepare(input: RoundtableResult, actor: string, automatic = false) {
     const result = resultSchema.parse(input);
     await this.proof(result, actor);
     const existing = await this.repository.findRun(result, actor);
     if (existing) return { report: existing };
-    await this.current(result);
+    await this.current(result, automatic);
     const receipt = await this.operations.issue(
       actor,
       await digest(JSON.stringify(result)),
-      "roundtable-save",
+      automatic ? "roundtable-autosave" : "roundtable-save",
       result.input.ideaId,
       result.input.inputRevision,
     );
@@ -277,12 +358,17 @@ export class RoundtableReportService {
       result,
     };
   }
-  async commit(input: RoundtableResult, token: string, actor: string) {
+  async commit(
+    input: RoundtableResult,
+    token: string,
+    actor: string,
+    automatic = false,
+  ) {
     const result = resultSchema.parse(input),
       hash = await digest(JSON.stringify(result)),
       op = await this.operations.read(token, actor);
     if (
-      op.action !== "roundtable-save" ||
+      op.action !== (automatic ? "roundtable-autosave" : "roundtable-save") ||
       op.payload_hash !== hash ||
       op.target !== result.input.ideaId ||
       op.expected_revision !== result.input.inputRevision
@@ -311,7 +397,7 @@ export class RoundtableReportService {
         await this.operations.finish(op.id, "done", existing.id);
         return { report: existing };
       }
-      await this.current(result);
+      await this.current(result, automatic);
       await this.repository.preflight();
       const snapshot = savedSnapshotSchema.parse({
         format: "idea-lab-roundtable-report",
@@ -321,6 +407,7 @@ export class RoundtableReportService {
         approvedAt: new Date().toISOString(),
         resultHash: hash,
         result,
+        storageMode: automatic ? "automatic" : "reviewed",
       });
       attempted = true;
       const report = await this.repository.append(snapshot, actor);
@@ -343,9 +430,19 @@ export class RoundtableReportService {
       throw error;
     }
   }
+  async recover(input: RoundtableResult, actor: string) {
+    const result = resultSchema.parse(input);
+    await this.proof(result, actor);
+    const report = await this.repository.findRun(result, actor);
+    if (!report) return { status: "uncertain", report: null };
+    return this.reconcile(report.snapshot.operation, actor);
+  }
   async reconcile(id: string, actor: string) {
     const op = await this.operations.readById(id, actor);
-    if (op.action !== "roundtable-save" || !op.target)
+    if (
+      !["roundtable-save", "roundtable-autosave"].includes(op.action) ||
+      !op.target
+    )
       throw new AppError(
         "INVALID_OPERATION",
         "This is not a roundtable report save.",

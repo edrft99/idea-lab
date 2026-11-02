@@ -1,3 +1,7 @@
+import {
+  RoundtableService,
+  roundtableRequestStatus,
+} from "../lib/roundtable/service";
 import { describe, it, expect, vi, afterEach } from "vitest";
 import {
   RoundtableReports,
@@ -18,7 +22,8 @@ async function setup() {
     ops = new Operations(memory.db),
     rows: any[] = [],
     calls: { path: string; method: string; body: any }[] = [];
-  let loseResponse = false;
+  let loseResponse = false,
+    rejectNext = false;
   const props = Object.fromEntries(
     Object.entries(reviewTypes).map(([name, type], n) => [
       name,
@@ -38,6 +43,16 @@ async function setup() {
         next_cursor: null,
       });
     if (path === "pages" && options.method === "POST") {
+      if (rejectNext) {
+        rejectNext = false;
+        return Response.json(
+          {
+            code: "validation_error",
+            message: "Synthetic rejection before mutation",
+          },
+          { status: 400 },
+        );
+      }
       const mapped = Object.fromEntries(
         Object.entries(body.properties).map(([id, value]) => [
           Object.keys(props).find((name) => props[name].id === id)!,
@@ -98,6 +113,9 @@ async function setup() {
     result,
     rows,
     calls,
+    reject: () => {
+      rejectNext = true;
+    },
     lose: () => {
       loseResponse = true;
     },
@@ -227,5 +245,186 @@ describe("durable reviewed roundtable reports", () => {
     await expect(service.list(idea.id, "owner")).rejects.toMatchObject({
       code: "ROUNDTABLE_REPORT_INVALID",
     });
+  });
+});
+
+async function automaticSetup() {
+  const state = await setup();
+  const provider = {
+    evaluate: vi.fn().mockResolvedValue({
+      value: assessment,
+      resolvedModel: "synthetic-gpt-resolved",
+      responseId: "synthetic-response",
+      usage: null,
+    }),
+  };
+  const generation = new RoundtableService(
+    gptConfig,
+    state.repo,
+    state.ops,
+    provider,
+    state.service,
+  );
+  return { ...state, provider, generation };
+}
+describe("automatic storage within the GPT request", () => {
+  it("stores before returning without another save approval and recovers the report without replaying GPT", async () => {
+    const { generation, service, provider, calls, ops } =
+      await automaticSetup();
+    const approval = await generation.prepare(roundtableCommand, "owner");
+    expect(approval.profile.autoSaveReport).toBe(true);
+    expect(calls.filter((c) => c.path === "pages")).toHaveLength(0);
+    const generated = await generation.execute(
+      roundtableCommand,
+      approval.approvalToken,
+      "owner",
+    );
+    expect(generated.storage.status).toBe("saved");
+    if (generated.storage.status !== "saved")
+      throw new Error("Missing automatic save");
+    expect(generated.storage.report.snapshot.storageMode).toBe("automatic");
+    expect(generated.storage.report.snapshot.result).toEqual(generated.result);
+    const replay = await generation.execute(
+      roundtableCommand,
+      approval.approvalToken,
+      "owner",
+    );
+    expect(replay.result).toEqual(generated.result);
+    const recovered = await roundtableRequestStatus(
+      ops,
+      approval.approvalToken,
+      "owner",
+      service,
+    );
+    expect(recovered.resultRetained).toBe(true);
+    expect(recovered).toMatchObject({ result: generated.result });
+    expect(provider.evaluate).toHaveBeenCalledTimes(1);
+    expect(calls.filter((c) => c.path === "pages")).toHaveLength(1);
+    expect(calls.some((c) => c.method === "PATCH")).toBe(false);
+  });
+  it("returns GPT output when a Notion response is lost and reconciles storage without regenerating", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    const { generation, service, provider, calls, lose, ops } =
+      await automaticSetup();
+    const approval = await generation.prepare(roundtableCommand, "owner");
+    lose();
+    const generated = await generation.execute(
+      roundtableCommand,
+      approval.approvalToken,
+      "owner",
+    );
+    expect(generated.result.assessment).toEqual(assessment);
+    expect(generated.storage.status).toBe("uncertain");
+    expect((await ops.read(approval.approvalToken, "owner")).status).toBe(
+      "done",
+    );
+    expect((await service.recover(generated.result, "owner")).status).toBe(
+      "done",
+    );
+    expect(provider.evaluate).toHaveBeenCalledTimes(1);
+    expect(calls.filter((c) => c.path === "pages")).toHaveLength(1);
+  });
+  it("retries only storage after a definitive rejection", async () => {
+    const { generation, service, provider, calls, reject } =
+      await automaticSetup();
+    const approval = await generation.prepare(roundtableCommand, "owner");
+    reject();
+    const generated = await generation.execute(
+      roundtableCommand,
+      approval.approvalToken,
+      "owner",
+    );
+    expect(generated.storage.status).toBe("failed");
+    const saved = await service.autoSave(generated.result, "owner");
+    expect(saved.status).toBe("saved");
+    expect(provider.evaluate).toHaveBeenCalledTimes(1);
+    expect(calls.filter((c) => c.path === "pages")).toHaveLength(2);
+  });
+  it("keeps a completed report as historical evidence if the idea changes while GPT is working", async () => {
+    const { generation, provider, repo } = await automaticSetup();
+    const approval = await generation.prepare(roundtableCommand, "owner");
+    provider.evaluate.mockImplementation(async () => {
+      vi.mocked(repo.get).mockResolvedValue({
+        ...idea,
+        revision: "changed-during-generation",
+      });
+      return {
+        value: assessment,
+        resolvedModel: "synthetic-gpt-resolved",
+        responseId: "synthetic-response",
+        usage: null,
+      };
+    });
+    const generated = await generation.execute(
+      roundtableCommand,
+      approval.approvalToken,
+      "owner",
+    );
+    expect(generated.storage.status).toBe("saved");
+    expect(generated.result.input.inputRevision).toBe(idea.revision);
+  });
+  it("does not automatically save forged model output", async () => {
+    const { service, result, calls } = await automaticSetup();
+    const saved = await service.autoSave(
+      { ...result, assessment: { ...result.assessment, summary: "Forged" } },
+      "owner",
+    );
+    expect(saved.status).toBe("failed");
+    expect(calls.filter((c) => c.path === "pages")).toHaveLength(0);
+  });
+});
+
+describe("automatic save recovery after a reload", () => {
+  it("releases a confirmed save’s lock when history is loaded after a lost response", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    const { generation, service, lose, ops } = await automaticSetup();
+    const approval = await generation.prepare(roundtableCommand, "owner");
+    lose();
+    const generated = await generation.execute(
+      roundtableCommand,
+      approval.approvalToken,
+      "owner",
+    );
+    if (
+      generated.storage.status !== "uncertain" ||
+      !generated.storage.operationId
+    )
+      throw new Error("Expected interrupted storage");
+    expect(
+      (await ops.readById(generated.storage.operationId, "owner")).status,
+    ).toBe("uncertain");
+    expect(await service.list(idea.id, "owner")).toHaveLength(1);
+    expect(
+      (await ops.readById(generated.storage.operationId, "owner")).status,
+    ).toBe("done");
+    const edit = await ops.issue(
+      "owner",
+      "edit-hash",
+      "update",
+      idea.id,
+      idea.revision,
+    );
+    expect(
+      await ops.claim(await ops.read(edit.token, "owner"), "edit-hash"),
+    ).toBe(true);
+  });
+});
+
+describe("automatic storage coordination", () => {
+  it("waits for an existing idea edit and then saves the same result without another model call", async () => {
+    const { service, result, ops, calls } = await setup();
+    const edit = await ops.issue(
+      "owner",
+      "edit-hash",
+      "update",
+      idea.id,
+      idea.revision,
+    );
+    await ops.claim(await ops.read(edit.token, "owner"), "edit-hash");
+    expect((await service.autoSave(result, "owner")).status).toBe("failed");
+    expect(calls.filter((c) => c.path === "pages")).toHaveLength(0);
+    await ops.finish(edit.id, "failed");
+    expect((await service.autoSave(result, "owner")).status).toBe("saved");
+    expect(calls.filter((c) => c.path === "pages")).toHaveLength(1);
   });
 });
