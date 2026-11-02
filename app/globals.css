@@ -2479,3 +2479,8 @@ dd {
   opacity: 0.5;
   cursor: not-allowed;
 }
+
+.idea-delete-action { padding: 8px 0 12px; }
+.idea-delete-button { color: #a12d35; font-size: 12px; }
+.idea-delete-action .subtle-note { max-width: 40rem; margin-top: 8px; }
+.focus-grid > div > .idea-card { height: auto; min-height: 270px; }

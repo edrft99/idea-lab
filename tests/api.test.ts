@@ -1,3 +1,6 @@
+import { POST as deletePrepare } from "../app/api/ideas/delete/prepare/route";
+import { POST as deleteCommit } from "../app/api/ideas/delete/commit/route";
+import { POST as deleteStatus } from "../app/api/ideas/delete/status/route";
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 vi.mock("@/app/chatgpt-auth", () => ({ getChatGPTUser: vi.fn() }));
 import { getChatGPTUser } from "../app/chatgpt-auth";
@@ -183,3 +186,38 @@ describe("API authorization and mutation boundary", () => {
 async function readBody(response: Response) {
   return (await response.json()) as { error: { code: string }; data: unknown };
 }
+
+describe("deletion API boundaries", () => {
+  it.each([deletePrepare, deleteCommit, deleteStatus])(
+    "requires owner sign-in",
+    async (route) => {
+      vi.mocked(getChatGPTUser).mockResolvedValue(null);
+      const fetcher = vi.spyOn(globalThis, "fetch");
+      const result = await runWithIdeaRuntime(environment, () =>
+        route(post({})),
+      );
+      expect(result.status).toBe(401);
+      expect(fetcher).not.toHaveBeenCalled();
+    },
+  );
+  it.each([deletePrepare, deleteCommit, deleteStatus])(
+    "rejects cross-origin requests",
+    async (route) => {
+      const fetcher = vi.spyOn(globalThis, "fetch");
+      const result = await runWithIdeaRuntime(environment, () =>
+        route(post({}, "https://elsewhere.test")),
+      );
+      expect(result.status).toBe(403);
+      expect(fetcher).not.toHaveBeenCalled();
+    },
+  );
+  it.each([deletePrepare, deleteCommit, deleteStatus])(
+    "rejects invalid requests",
+    async (route) => {
+      const result = await runWithIdeaRuntime(environment, () =>
+        route(post({ approvalToken: "forged" })),
+      );
+      expect(result.status).toBe(400);
+    },
+  );
+});
