@@ -84,7 +84,7 @@ export class Operations {
   async countAIAttempts(actor: string, since: number) {
     const row = await this.db
       .prepare(
-        "SELECT COUNT(*) AS count FROM idea_lab_operations WHERE actor_hash=? AND action IN ('ai-evaluate','ai-extract','semantic-index','semantic-query','semantic-snapshot-batch') AND created_at>=? AND status<>'pending'",
+        "SELECT COUNT(*) AS count FROM idea_lab_operations WHERE actor_hash=? AND action IN ('ai-evaluate','ai-extract','roundtable-gpt','semantic-index','semantic-query','semantic-snapshot-batch') AND created_at>=? AND status<>'pending'",
       )
       .bind(await digest(actor), since)
       .first<{ count: number }>();
@@ -347,6 +347,21 @@ export class Operations {
       .first();
     if (saved) await this.unlock(id);
     return !!saved;
+  }
+  // GPT generation never mutates Notion. Retain an uncertain request status,
+  // but do not leave the idea or shared provider budget locked after it ends.
+  async finishRoundtableRequest(
+    id: string,
+    status: "done" | "failed" | "uncertain",
+    resultId: string | null = null,
+  ) {
+    await this.db
+      .prepare(
+        "UPDATE idea_lab_operations SET status=?,result_id=? WHERE id=? AND action='roundtable-gpt' AND status<>'done'",
+      )
+      .bind(status, resultId, id)
+      .run();
+    await this.unlock(id);
   }
   async finish(
     id: string,

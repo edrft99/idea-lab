@@ -159,10 +159,16 @@ export function RecentSaves() {
                       : "Import recovery"
                     : op.action.startsWith("semantic-")
                       ? (semanticLabels[op.action] ?? "Semantic operation")
-                      : ["ai-evaluate", "ai-extract"].includes(op.action)
-                        ? op.action === "ai-extract"
-                          ? "AI extraction request"
-                          : "AI assessment request"
+                      : [
+                            "ai-evaluate",
+                            "ai-extract",
+                            "roundtable-gpt",
+                          ].includes(op.action)
+                        ? op.action === "roundtable-gpt"
+                          ? "GPT roundtable assessment"
+                          : op.action === "ai-extract"
+                            ? "AI extraction request"
+                            : "AI assessment request"
                         : isProposal(op.action)
                           ? op.action.endsWith("-store")
                             ? "Proposal storage"
@@ -236,7 +242,9 @@ export function RecentSaves() {
               op.action !== "attach-file" &&
               op.action !== "delete-idea" &&
               !op.action.startsWith("semantic-") &&
-              !["ai-evaluate", "ai-extract"].includes(op.action) && (
+              !["ai-evaluate", "ai-extract", "roundtable-gpt"].includes(
+                op.action,
+              ) && (
                 <Link
                   className="text-link"
                   href={
