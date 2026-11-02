@@ -44,3 +44,12 @@ Recent saves in Settings identifies GPT roundtable requests and checks status. I
 Repository tests use synthetic Notion records, SQLite and model responses. Browser QA uses a local synthetic owner and intercepted API responses, covering desktop/mobile and dark appearance, seat selection, empty selection, exact review before dispatch, one approved dispatch, reports, disconnected GPT and interrupted-request status/fresh-review behavior. No real model request, provider charge or Notion mutation is needed for these checks. Live GPT compatibility remains unverified until protected model credentials are configured and an owner-approved synthetic request succeeds.
 
 API protocol reference: https://developers.openai.com/api/docs/guides/structured-outputs
+
+
+## Reviewer scorecards
+
+Each seat uses its vendor mark with three visible score badges: F (feasibility), S (success) and V (value offered). Missing assessments and unknown ratings show a dash. Only actual generated or loaded GPT ratings populate the first implemented seat; other providers remain Coming next.
+
+Select a reviewer to inspect its own scores and evidence. The detail panel groups its report into Overview, Risks, Expand and Test next. Each score expands to show its evidence. Selecting an unconnected reviewer hides GPT’s report and shows the selected provider’s empty scores. The idea brief collapses after a result and can be reopened to prepare another request. Reading score evidence, switching report sections and selecting a seat make no provider calls.
+
+Desktop uses a circular table arrangement and a scrollable selected-reviewer panel; mobile uses a four-seat grid and a full-height panel, with selection scrolling the panel into view. Vendor marks are bundled locally with LobeHub’s MIT licence and source attribution in public/vendors/.

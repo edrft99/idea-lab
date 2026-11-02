@@ -1,13 +1,15 @@
 "use client";
 import { useRef, useState } from "react";
+import { ReviewerAssessment } from "./reviewer-assessment";
+import { VendorMark, type ReviewerId } from "./vendor-mark";
 import Link from "@/components/navigation-link";
 import { useRouter } from "next/navigation";
 import {
   ArrowRight,
+  ChevronDown,
   ArrowUpRight,
   Check,
   CheckCircle2,
-  Circle,
   Download,
   FlaskConical,
   Lightbulb,
@@ -34,7 +36,6 @@ import {
   decodeResult,
   dimensions,
   labels,
-  provisionalScore,
   requestSchema,
   resultSchema,
   rubricVersion,
@@ -66,21 +67,18 @@ const seats = [
   {
     id: "gpt",
     name: "GPT",
-    initial: "G",
     description: "A fresh perspective, grounded in your brief.",
     color: "mint",
   },
   {
     id: "claude",
     name: "Claude",
-    initial: "C",
     description: "Another perspective on the assumptions and opportunities.",
     color: "sand",
   },
   {
     id: "grok",
     name: "Grok",
-    initial: "G",
     description:
       "Another voice to challenge the idea and surface alternatives.",
     color: "blue",
@@ -88,7 +86,6 @@ const seats = [
   {
     id: "copilot",
     name: "GitHub Copilot",
-    initial: "⌘",
     description: "An additional review through GitHub Copilot.",
     color: "lilac",
   },
@@ -163,7 +160,7 @@ function IdeaPicker() {
 }
 function Roundtable({ idea }: { idea?: Idea }) {
   const profile = useResource<Status>("/api/roundtable/status");
-  const [selected, setSelected] = useState("gpt"),
+  const [selected, setSelected] = useState<ReviewerId>("gpt"),
     [selection, setSelection] = useState<
       Partial<Record<(typeof selectedFields)[number], string>>
     >({}),
@@ -177,6 +174,7 @@ function Roundtable({ idea }: { idea?: Idea }) {
     [uncertain, setUncertain] = useState(false),
     [checked, setChecked] = useState(false),
     [restored, setRestored] = useState(false);
+  const reviewerPanel = useRef<HTMLElement>(null);
   const guard = useRef(false),
     file = useRef<HTMLInputElement>(null);
   const locked = busy || !!receipt || uncertain;
@@ -349,7 +347,16 @@ function Roundtable({ idea }: { idea?: Idea }) {
       if (file.current) file.current.value = "";
     }
   }
-  const score = result ? provisionalScore(result.assessment) : null;
+  const selectedResult = result?.participant === selected ? result : null;
+  function selectReviewer(id: ReviewerId) {
+    setSelected(id);
+    reviewerPanel.current?.scrollTo({ top: 0 });
+    if (window.matchMedia("(max-width: 760px)").matches)
+      reviewerPanel.current?.scrollIntoView({
+        block: "start",
+        behavior: "instant",
+      });
+  }
   return (
     <div className="page rt-page">
       <header className="page-heading rt-heading">
@@ -402,7 +409,7 @@ function Roundtable({ idea }: { idea?: Idea }) {
             <span>
               <UsersRound size={17} /> YOUR REVIEW PANEL
             </span>
-            <small>One seat connected at a time</small>
+            <small>Select a reviewer to explore its assessment</small>
           </div>
           <h2 id="rt-table-title" className="rt-visually-hidden">
             Choose a reviewer
@@ -426,13 +433,42 @@ function Roundtable({ idea }: { idea?: Idea }) {
                   s.id +
                   (selected === s.id ? " is-selected" : "")
                 }
-                onClick={() => setSelected(s.id)}
+                onClick={() => selectReviewer(s.id)}
+                aria-controls="rt-reviewer-detail"
                 aria-pressed={selected === s.id}
                 aria-label={s.name + ": " + state(s.id)}
               >
-                <span className={"rt-avatar " + s.color}>
-                  {s.initial}
-                  {s.id === "gpt" && result && <CheckCircle2 size={15} />}
+                <span className="rt-seat-score-ring">
+                  <span className={"rt-avatar " + s.color}>
+                    <VendorMark id={s.id} />
+                  </span>
+                  {dimensions.map((key) => (
+                    <span
+                      key={key}
+                      className={"rt-seat-score rt-seat-score-" + key}
+                      aria-label={
+                        labels[key] +
+                        ": " +
+                        (result?.participant === s.id
+                          ? (result.assessment.ratings[key].score ??
+                            "not enough evidence")
+                          : "not assessed")
+                      }
+                    >
+                      <abbr title={labels[key]}>
+                        {key === "feasibility"
+                          ? "F"
+                          : key === "success"
+                            ? "S"
+                            : "V"}
+                      </abbr>
+                      <strong>
+                        {result?.participant === s.id
+                          ? (result.assessment.ratings[key].score ?? "—")
+                          : "—"}
+                      </strong>
+                    </span>
+                  ))}
                 </span>
                 <strong>{s.name}</strong>
                 <small>
@@ -447,14 +483,23 @@ function Roundtable({ idea }: { idea?: Idea }) {
           <div className="rt-table-caption">
             <ShieldCheck size={15} />
             <p>
-              Independent thinking first. Shared perspectives next.
-              <br />
-              Every opinion stays attributed to its reviewer.
+              <span className="rt-score-legend">
+                <span>F · Feasibility</span>
+                <span>S · Success</span>
+                <span>V · Value offered</span>
+              </span>
+              Scores belong to each reviewer. Select its icon to see the
+              evidence.
             </p>
           </div>
         </section>
         <aside
-          className="panel rt-reviewer-panel"
+          className={
+            "panel rt-reviewer-panel" +
+            (selectedResult ? " has-assessment" : "")
+          }
+          id="rt-reviewer-detail"
+          ref={reviewerPanel}
           aria-label="Selected reviewer"
         >
           <div className="rt-section-label">
@@ -464,7 +509,7 @@ function Roundtable({ idea }: { idea?: Idea }) {
             </span>
           </div>
           <span className={"rt-avatar rt-inspector-avatar " + seat.color}>
-            {seat.initial}
+            <VendorMark id={seat.id} />
           </span>
           <h2>{seat.name}</h2>
           <p>{seat.description}</p>
@@ -495,29 +540,68 @@ function Roundtable({ idea }: { idea?: Idea }) {
                   </p>
                 </div>
               )}
-              <h3>What GPT will bring</h3>
-              <ul className="rt-check-list">
-                <li>
-                  <Check size={14} />A grounded viability assessment
-                </li>
-                <li>
-                  <Check size={14} />
-                  Weak spots & untested assumptions
-                </li>
-                <li>
-                  <Check size={14} />
-                  Ways to develop the idea
-                </li>
-                <li>
-                  <Check size={14} />
-                  Small experiments to test next
-                </li>
-              </ul>
+              {selectedResult ? (
+                <ReviewerAssessment
+                  key={selectedResult.runId}
+                  result={selectedResult}
+                  restored={restored}
+                  onDownload={download}
+                />
+              ) : (
+                <>
+                  <h3>GPT’s scores</h3>
+                  <div className="rt-empty-scores">
+                    {dimensions.map((key) => (
+                      <div key={key}>
+                        <span>{labels[key]}</span>
+                        <strong>
+                          —<small>/100</small>
+                        </strong>
+                      </div>
+                    ))}
+                  </div>
+                  <p className="rt-agent-score-note">
+                    No assessment yet. Complete the idea brief below to request
+                    GPT’s independent review.
+                  </p>
+                  <h3>What GPT will bring</h3>
+                  <ul className="rt-check-list">
+                    <li>
+                      <Check size={14} />A grounded viability assessment
+                    </li>
+                    <li>
+                      <Check size={14} />
+                      Weak spots & untested assumptions
+                    </li>
+                    <li>
+                      <Check size={14} />
+                      Ways to develop the idea
+                    </li>
+                    <li>
+                      <Check size={14} />
+                      Small experiments to test next
+                    </li>
+                  </ul>
+                </>
+              )}
             </>
           ) : (
             <div className="rt-coming-note">
               <MessageSquare size={22} />
-              <h3>There’s a place at the table.</h3>
+              <div
+                className="rt-empty-scores"
+                aria-label={seat.name + " scores"}
+              >
+                {dimensions.map((key) => (
+                  <div key={key}>
+                    <span>{labels[key]}</span>
+                    <strong>
+                      —<small>/100</small>
+                    </strong>
+                  </div>
+                ))}
+              </div>
+              <h3>No assessment from {seat.name} yet.</h3>
               <p>
                 {seat.name} will contribute a separate assessment, then review
                 the other perspectives once its integration is available.
@@ -525,7 +609,7 @@ function Roundtable({ idea }: { idea?: Idea }) {
               <button
                 type="button"
                 className="site-secondary"
-                onClick={() => setSelected("gpt")}
+                onClick={() => selectReviewer("gpt")}
               >
                 Return to GPT <ArrowRight size={14} />
               </button>
@@ -533,287 +617,262 @@ function Roundtable({ idea }: { idea?: Idea }) {
           )}
         </aside>
       </div>
-      <section className="rt-scorecard" aria-label="Viability scores">
-        {dimensions.map((key, n) => (
-          <div key={key} className="panel rt-score">
-            <span className="rt-score-icon">
-              {n === 0 ? (
-                <FlaskConical size={17} />
-              ) : n === 1 ? (
-                <Target size={17} />
-              ) : (
-                <Sparkles size={17} />
-              )}
-            </span>
-            <div>
-              <h3>{labels[key]}</h3>
-              <p>
-                {key === "feasibility"
-                  ? "Can you make it happen?"
-                  : key === "success"
-                    ? "Can it meet your defined outcome?"
-                    : "Does it solve a meaningful problem?"}
-              </p>
+      <details className="rt-brief-disclosure" open={!result || !!receipt}>
+        <summary>
+          {result
+            ? "Idea brief & request another assessment"
+            : "Prepare the idea brief"}
+          <ChevronDown size={16} />
+        </summary>
+        {!idea ? (
+          <section className="panel rt-brief">
+            <div className="rt-section-label">
+              <span>START WITH A POSSIBILITY</span>
             </div>
-            <strong>
-              {result?.assessment.ratings[key].score ?? "—"}
-              <small>/100</small>
-            </strong>
-            {result && (
-              <p className="rt-score-evidence">
-                {result.assessment.ratings[key].evidence}
-              </p>
-            )}
-          </div>
-        ))}
-      </section>
-      <p className="rt-score-note">
-        {result
-          ? `GPT’s provisional score: ${score ?? "insufficient evidence"}${score !== null ? "/100" : ""} · Confidence: ${Math.round(result.assessment.confidence * 100)}%. `
-          : "Scores appear after an assessment. "}
-        Equal weight across all three dimensions. A success score is a
-        judgement, not a probability. Panel consensus is not available yet.
-      </p>
-      {!idea ? (
-        <section className="panel rt-brief">
-          <div className="rt-section-label">
-            <span>START WITH A POSSIBILITY</span>
-          </div>
-          <IdeaPicker />
-        </section>
-      ) : (
-        <>
-          <section className="panel rt-brief" aria-labelledby="rt-brief-title">
-            <div className="section-heading">
-              <div>
-                <div className="eyebrow">THE IDEA BRIEF</div>
-                <h2 id="rt-brief-title">
-                  Good questions start with the right context.
-                </h2>
-                <p>
-                  Choose what GPT can read. Edit or redact any excerpt before
-                  reviewing the request.
-                </p>
-              </div>
-              <Link className="text-link" href={"/ideas/" + idea.id}>
-                View idea <ArrowUpRight size={14} />
-              </Link>
-            </div>
-            <fieldset disabled={locked} className="rt-fields">
-              <legend>Idea excerpts</legend>
-              <div className="rt-excerpt-options">
-                {selectedFields.map((key) => (
-                  <label key={key}>
-                    <input
-                      type="checkbox"
-                      checked={key in selection}
-                      disabled={!idea[key]?.trim()}
-                      onChange={(e) => {
-                        setError("");
-                        setSelection((previous) => {
-                          const next = { ...previous };
-                          if (e.target.checked)
-                            next[key] = redact(idea[key] ?? "");
-                          else delete next[key];
-                          return next;
-                        });
-                      }}
-                    />
-                    {fieldLabels[key]}
-                  </label>
-                ))}
-              </div>
-              {selectedFields
-                .filter((key) => key in selection)
-                .map((key) => (
-                  <label className="rt-field" key={key}>
-                    {fieldLabels[key]}
-                    <textarea
-                      rows={3}
-                      maxLength={3000}
-                      value={selection[key]}
-                      onChange={(e) =>
-                        setSelection((previous) => ({
-                          ...previous,
-                          [key]: e.target.value,
-                        }))
-                      }
-                    />
-                  </label>
-                ))}
-              <div className="rt-brief-columns">
-                <label className="rt-field">
-                  What would success look like?
-                  <span>A concrete outcome, audience and time horizon.</span>
-                  <textarea
-                    rows={4}
-                    maxLength={1500}
-                    placeholder="For example: Help 20 independent makers save an hour a week within three months."
-                    value={criteria}
-                    onChange={(e) => setCriteria(e.target.value)}
-                  />
-                </label>
-                <label className="rt-field">
-                  What are you working with?
-                  <span>Time, budget, skills and important constraints.</span>
-                  <textarea
-                    rows={4}
-                    maxLength={1500}
-                    placeholder="For example: One developer, six weekends, a £300 budget, and existing tools."
-                    value={constraints}
-                    onChange={(e) => setConstraints(e.target.value)}
-                  />
-                </label>
-              </div>
-            </fieldset>
-            {!receipt && !uncertain && (
-              <div className="rt-brief-footer">
-                <p>
-                  <ShieldCheck size={16} />
-                  One GPT request. Review exactly what leaves Idea Lab before
-                  sending.
-                </p>
-                <button
-                  type="button"
-                  className="site-primary"
-                  disabled={busy || !gpt?.enabled}
-                  onClick={prepare}
-                >
-                  {busy ? (
-                    <LoaderCircle size={15} className="rt-spin" />
-                  ) : (
-                    <Sparkles size={15} />
-                  )}
-                  Review GPT request <ArrowRight size={15} />
-                </button>
-              </div>
-            )}
-            <div className="rt-file-actions">
-              <input
-                type="file"
-                ref={file}
-                className="rt-visually-hidden"
-                accept="application/json,.json"
-                onChange={(e) => void restore(e.target.files?.[0])}
-              />
-              <button
-                type="button"
-                className="text-link"
-                disabled={locked}
-                onClick={() => file.current?.click()}
-              >
-                <Upload size={14} />
-                Load private result
-              </button>
-              {result && (
-                <button type="button" className="text-link" onClick={download}>
-                  <Download size={14} />
-                  Download GPT result
-                </button>
-              )}
-            </div>
+            <IdeaPicker />
           </section>
-          {receipt && !uncertain && (
+        ) : (
+          <>
             <section
-              className="panel rt-transmission"
-              aria-labelledby="rt-consent-title"
+              className="panel rt-brief"
+              aria-labelledby="rt-brief-title"
             >
-              <div className="eyebrow">REVIEW BEFORE SENDING</div>
-              <h2 id="rt-consent-title">
-                One independent assessment from GPT.
-              </h2>
-              <p>
-                Only the content below, the scoring rubric and assessment
-                instructions will be sent. No sources, attachments, idea
-                identifiers, prior scores or other reviews are sent.
-              </p>
-              <dl>
+              <div className="section-heading">
                 <div>
-                  <dt>Destination</dt>
-                  <dd>{receipt.profile.endpoint}responses</dd>
+                  <div className="eyebrow">THE IDEA BRIEF</div>
+                  <h2 id="rt-brief-title">
+                    Good questions start with the right context.
+                  </h2>
+                  <p>
+                    Choose what GPT can read. Edit or redact any excerpt before
+                    reviewing the request.
+                  </p>
                 </div>
-                <div>
-                  <dt>Configured model</dt>
-                  <dd>{receipt.profile.deployment}</dd>
+                <Link className="text-link" href={"/ideas/" + idea.id}>
+                  View idea <ArrowUpRight size={14} />
+                </Link>
+              </div>
+              <fieldset disabled={locked} className="rt-fields">
+                <legend>Idea excerpts</legend>
+                <div className="rt-excerpt-options">
+                  {selectedFields.map((key) => (
+                    <label key={key}>
+                      <input
+                        type="checkbox"
+                        checked={key in selection}
+                        disabled={!idea[key]?.trim()}
+                        onChange={(e) => {
+                          setError("");
+                          setSelection((previous) => {
+                            const next = { ...previous };
+                            if (e.target.checked)
+                              next[key] = redact(idea[key] ?? "");
+                            else delete next[key];
+                            return next;
+                          });
+                        }}
+                      />
+                      {fieldLabels[key]}
+                    </label>
+                  ))}
                 </div>
-                <div>
-                  <dt>Limits</dt>
-                  <dd>
-                    One request · up to{" "}
-                    {receipt.profile.maxOutputTokens.toLocaleString()} output
-                    tokens · {receipt.profile.requestsPerHour} AI requests/hour
-                    · {Math.round(receipt.profile.timeoutMs / 1000)}s deadline.
-                    Provider charges may apply.
-                  </dd>
+                {selectedFields
+                  .filter((key) => key in selection)
+                  .map((key) => (
+                    <label className="rt-field" key={key}>
+                      {fieldLabels[key]}
+                      <textarea
+                        rows={3}
+                        maxLength={3000}
+                        value={selection[key]}
+                        onChange={(e) =>
+                          setSelection((previous) => ({
+                            ...previous,
+                            [key]: e.target.value,
+                          }))
+                        }
+                      />
+                    </label>
+                  ))}
+                <div className="rt-brief-columns">
+                  <label className="rt-field">
+                    What would success look like?
+                    <span>A concrete outcome, audience and time horizon.</span>
+                    <textarea
+                      rows={4}
+                      maxLength={1500}
+                      placeholder="For example: Help 20 independent makers save an hour a week within three months."
+                      value={criteria}
+                      onChange={(e) => setCriteria(e.target.value)}
+                    />
+                  </label>
+                  <label className="rt-field">
+                    What are you working with?
+                    <span>Time, budget, skills and important constraints.</span>
+                    <textarea
+                      rows={4}
+                      maxLength={1500}
+                      placeholder="For example: One developer, six weekends, a £300 budget, and existing tools."
+                      value={constraints}
+                      onChange={(e) => setConstraints(e.target.value)}
+                    />
+                  </label>
                 </div>
-                <div>
-                  <dt>Scoring</dt>
-                  <dd>
-                    Viability v1 · feasibility, success and value · 0–100 ·
-                    equal weights. Missing evidence can leave a score unknown.
-                  </dd>
+              </fieldset>
+              {!receipt && !uncertain && (
+                <div className="rt-brief-footer">
+                  <p>
+                    <ShieldCheck size={16} />
+                    One GPT request. Review exactly what leaves Idea Lab before
+                    sending.
+                  </p>
+                  <button
+                    type="button"
+                    className="site-primary"
+                    disabled={busy || !gpt?.enabled}
+                    onClick={prepare}
+                  >
+                    {busy ? (
+                      <LoaderCircle size={15} className="rt-spin" />
+                    ) : (
+                      <Sparkles size={15} />
+                    )}
+                    Review GPT request <ArrowRight size={15} />
+                  </button>
                 </div>
-                <div>
-                  <dt>Retention</dt>
-                  <dd>
-                    {receipt.profile.retentionNotice}
-                    <br />
-                    {receipt.profile.requestStorage}
-                    <br />
-                    Results remain in this browser until you download them. The
-                    server ledger stores request status and hashes only.
-                  </dd>
-                </div>
-                <div>
-                  <dt>Approval expires</dt>
-                  <dd>{new Date(receipt.expiresAt).toLocaleString()}</dd>
-                </div>
-              </dl>
-              <h3>Exact selected content</h3>
-              <pre>
-                {JSON.stringify(
-                  {
-                    selectedEvidence: receipt.command.selection,
-                    successCriteria: receipt.command.successCriteria,
-                    constraints: receipt.command.constraints,
-                  },
-                  null,
-                  2,
+              )}
+              <div className="rt-file-actions">
+                <input
+                  type="file"
+                  ref={file}
+                  className="rt-visually-hidden"
+                  accept="application/json,.json"
+                  onChange={(e) => void restore(e.target.files?.[0])}
+                />
+                <button
+                  type="button"
+                  className="text-link"
+                  disabled={locked}
+                  onClick={() => file.current?.click()}
+                >
+                  <Upload size={14} />
+                  Load private result
+                </button>
+                {result && (
+                  <button
+                    type="button"
+                    className="text-link"
+                    onClick={download}
+                  >
+                    <Download size={14} />
+                    Download GPT result
+                  </button>
                 )}
-              </pre>
-              <p>
-                No Notion record, idea text or active ranking will change. This
-                first release returns GPT’s independent assessment; peer
-                discussion comes later.
-              </p>
-              <div className="action-row">
-                <button
-                  type="button"
-                  className="site-secondary"
-                  disabled={busy}
-                  onClick={() => setReceipt(null)}
-                >
-                  <X size={15} />
-                  Back to brief
-                </button>
-                <button
-                  type="button"
-                  className="site-primary"
-                  disabled={busy}
-                  onClick={send}
-                >
-                  {busy ? (
-                    <LoaderCircle size={15} className="rt-spin" />
-                  ) : (
-                    <ShieldCheck size={15} />
-                  )}{" "}
-                  {busy ? "GPT is reviewing…" : "Approve & send to GPT"}
-                </button>
               </div>
             </section>
-          )}
-        </>
-      )}
+            {receipt && !uncertain && (
+              <section
+                className="panel rt-transmission"
+                aria-labelledby="rt-consent-title"
+              >
+                <div className="eyebrow">REVIEW BEFORE SENDING</div>
+                <h2 id="rt-consent-title">
+                  One independent assessment from GPT.
+                </h2>
+                <p>
+                  Only the content below, the scoring rubric and assessment
+                  instructions will be sent. No sources, attachments, idea
+                  identifiers, prior scores or other reviews are sent.
+                </p>
+                <dl>
+                  <div>
+                    <dt>Destination</dt>
+                    <dd>{receipt.profile.endpoint}responses</dd>
+                  </div>
+                  <div>
+                    <dt>Configured model</dt>
+                    <dd>{receipt.profile.deployment}</dd>
+                  </div>
+                  <div>
+                    <dt>Limits</dt>
+                    <dd>
+                      One request · up to{" "}
+                      {receipt.profile.maxOutputTokens.toLocaleString()} output
+                      tokens · {receipt.profile.requestsPerHour} AI
+                      requests/hour ·{" "}
+                      {Math.round(receipt.profile.timeoutMs / 1000)}s deadline.
+                      Provider charges may apply.
+                    </dd>
+                  </div>
+                  <div>
+                    <dt>Scoring</dt>
+                    <dd>
+                      Viability v1 · feasibility, success and value · 0–100 ·
+                      equal weights. Missing evidence can leave a score unknown.
+                    </dd>
+                  </div>
+                  <div>
+                    <dt>Retention</dt>
+                    <dd>
+                      {receipt.profile.retentionNotice}
+                      <br />
+                      {receipt.profile.requestStorage}
+                      <br />
+                      Results remain in this browser until you download them.
+                      The server ledger stores request status and hashes only.
+                    </dd>
+                  </div>
+                  <div>
+                    <dt>Approval expires</dt>
+                    <dd>{new Date(receipt.expiresAt).toLocaleString()}</dd>
+                  </div>
+                </dl>
+                <h3>Exact selected content</h3>
+                <pre>
+                  {JSON.stringify(
+                    {
+                      selectedEvidence: receipt.command.selection,
+                      successCriteria: receipt.command.successCriteria,
+                      constraints: receipt.command.constraints,
+                    },
+                    null,
+                    2,
+                  )}
+                </pre>
+                <p>
+                  No Notion record, idea text or active ranking will change.
+                  This first release returns GPT’s independent assessment; peer
+                  discussion comes later.
+                </p>
+                <div className="action-row">
+                  <button
+                    type="button"
+                    className="site-secondary"
+                    disabled={busy}
+                    onClick={() => setReceipt(null)}
+                  >
+                    <X size={15} />
+                    Back to brief
+                  </button>
+                  <button
+                    type="button"
+                    className="site-primary"
+                    disabled={busy}
+                    onClick={send}
+                  >
+                    {busy ? (
+                      <LoaderCircle size={15} className="rt-spin" />
+                    ) : (
+                      <ShieldCheck size={15} />
+                    )}{" "}
+                    {busy ? "GPT is reviewing…" : "Approve & send to GPT"}
+                  </button>
+                </div>
+              </section>
+            )}
+          </>
+        )}
+      </details>
       {uncertain && (
         <section className="panel rt-transmission">
           <h2>Let’s check this request.</h2>
@@ -866,94 +925,6 @@ function Roundtable({ idea }: { idea?: Idea }) {
         <p role="status" className="rt-notice">
           {message}
         </p>
-      )}
-      {result && (
-        <section className="panel rt-report" aria-labelledby="rt-report-title">
-          <div className="section-heading">
-            <div>
-              <div className="eyebrow">GPT’S INDEPENDENT PERSPECTIVE</div>
-              <h2 id="rt-report-title">{result.assessment.verdict}</h2>
-              <p>
-                {result.resolvedModel} ·{" "}
-                {new Date(result.completedAt).toLocaleString()} ·{" "}
-                {restored
-                  ? "Imported file · unverified provenance"
-                  : "Generated in this session"}
-              </p>
-            </div>
-            <button type="button" className="site-secondary" onClick={download}>
-              <Download size={15} />
-              Download report
-            </button>
-          </div>
-          <p className="rt-report-summary">{result.assessment.summary}</p>
-          <details className="rt-assessed-brief">
-            <summary>Brief GPT assessed</summary>
-            <pre>
-              {JSON.stringify(
-                {
-                  selectedEvidence: result.input.selection,
-                  successCriteria: result.input.successCriteria,
-                  constraints: result.input.constraints,
-                },
-                null,
-                2,
-              )}
-            </pre>
-          </details>
-          <div className="rt-report-columns">
-            {(
-              [
-                {
-                  key: "strengths",
-                  title: "What’s working",
-                  icon: CheckCircle2,
-                },
-                { key: "risks", title: "Where it could break", icon: Target },
-                {
-                  key: "assumptions",
-                  title: "What needs proving",
-                  icon: Circle,
-                },
-                { key: "expansions", title: "Room to grow", icon: Sparkles },
-              ] as const
-            ).map((group) => (
-              <section key={group.key}>
-                <h3>
-                  <group.icon size={16} />
-                  {group.title}
-                </h3>
-                <ul>
-                  {result.assessment[group.key].map((text, n) => (
-                    <li key={n}>{text}</li>
-                  ))}
-                </ul>
-              </section>
-            ))}
-          </div>
-          <div className="rt-experiments">
-            <h3>
-              <FlaskConical size={17} />
-              The next small experiments
-            </h3>
-            {result.assessment.experiments.map((test, n) => (
-              <div key={n}>
-                <span>{String(n + 1).padStart(2, "0")}</span>
-                <p>
-                  {test.experiment}
-                  <small>
-                    <strong>Look for:</strong> {test.successSignal}
-                  </small>
-                </p>
-              </div>
-            ))}
-          </div>
-          <p className="rt-score-note">
-            Keep this download private. This assessment has not been saved to
-            Notion or applied to your idea. The full panel ranking will follow
-            when cross-review is implemented.
-          </p>
-        </section>
       )}
       <footer className="rt-roadmap">
         <span>
