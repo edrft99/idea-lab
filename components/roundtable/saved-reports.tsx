@@ -20,22 +20,30 @@ import {
 import type { SavedReport, AutoSaveResult } from "@/lib/roundtable/reports";
 export function SavedReports({
   idea,
+  participant,
   result,
   busy,
   storage,
   onLoad,
+  onHistory,
   onBusyChange,
 }: {
   idea: Idea;
+  participant: "gpt" | "claude";
   result: RoundtableResult | null;
   busy: boolean;
   storage: AutoSaveResult | null;
   onLoad: (result: RoundtableResult) => void;
+  onHistory: (reports: SavedReport[]) => void;
   onBusyChange: (busy: boolean) => void;
 }) {
   const history = useResource<SavedReport[]>(
     "/api/roundtable/reports?ideaId=" + idea.id,
   );
+  const reports = history.data?.filter(
+    (row) => row.snapshot.result.participant === participant,
+  );
+  const name = participant === "claude" ? "Claude" : "GPT";
   const [local, setLocal] = useState<{
       runId: string;
       state: AutoSaveResult;
@@ -46,26 +54,31 @@ export function SavedReports({
     attempted = useRef(new Set<string>()),
     load = useRef(onLoad);
   load.current = onLoad;
+  const historyCallback = useRef(onHistory);
+  historyCallback.current = onHistory;
+  useEffect(() => {
+    if (history.data) historyCallback.current(history.data);
+  }, [history.data]);
   const state = local?.runId === result?.runId ? local?.state : storage;
   const saved = result
     ? state?.status === "saved" &&
       state.report.snapshot.result.runId === result.runId
       ? state.report
-      : history.data?.find((row) => row.snapshot.result.runId === result.runId)
+      : reports?.find((row) => row.snapshot.result.runId === result.runId)
     : null;
   const stale = !!result && result.input.inputRevision !== idea.revision;
   useEffect(() => {
     onBusyChange(working);
   }, [working, onBusyChange]);
   useEffect(() => {
-    if (!result && !busy && history.data?.length) {
+    if (!result && !busy && reports?.length) {
       const current =
-        history.data.find(
+        reports.find(
           (row) => row.snapshot.result.input.inputRevision === idea.revision,
-        ) ?? history.data[0];
+        ) ?? reports[0];
       load.current(resultSchema.parse(current.snapshot.result));
     }
-  }, [history.data, result, busy, idea.revision]);
+  }, [history.data, result, busy, idea.revision, participant]);
   async function persist() {
     if (!result || guard.current || busy) return;
     guard.current = true;
@@ -140,7 +153,7 @@ export function SavedReports({
             status: "failed",
             operationId: null,
             message:
-              "This save was not completed. Retry automatic saving; GPT will not run again.",
+              "This save was not completed. Retry automatic saving; The model will not run again.",
           },
         });
       } else
@@ -187,8 +200,8 @@ export function SavedReports({
               : pending
                 ? "Keeping this assessment’s scores, evidence and brief in Notion. No extra approval is needed."
                 : result
-                  ? "GPT completed, but its report is not confirmed saved. Retry or check storage only; GPT will not run again."
-                  : "Completed GPT assessments save automatically and appear here when you reopen an idea."}
+                  ? "The reviewer completed, but its report is not confirmed saved. Retry or check storage only; The model will not run again."
+                  : "Completed assessments save automatically and appear here when you reopen an idea."}
           </p>
         </div>
         {saved?.url && (
@@ -218,6 +231,14 @@ export function SavedReports({
           </button>
         </div>
       )}
+      {!result && reports?.length === 0 && (
+        <p className="rt-agent-score-note">
+          No saved {name} assessment for this idea yet.{" "}
+          {participant === "claude"
+            ? "Reuse GPT’s brief below to request Claude’s independent review."
+            : "Prepare a brief below to start a review."}
+        </p>
+      )}
       {stale && (
         <p className="rt-save-warning">
           This report was based on an earlier version of the idea. Its scores
@@ -237,20 +258,18 @@ export function SavedReports({
           Loading saved history…
         </p>
       )}
-      {!!history.data?.length && (
+      {!!reports?.length && (
         <label className="rt-history-picker">
           View a saved assessment
           <select
             disabled={busy || working}
             value={
-              history.data.some(
-                (row) => row.snapshot.result.runId === result?.runId,
-              )
+              reports.some((row) => row.snapshot.result.runId === result?.runId)
                 ? result!.runId
                 : ""
             }
             onChange={(e) => {
-              const report = history.data?.find(
+              const report = reports?.find(
                 (row) => row.snapshot.result.runId === e.target.value,
               );
               if (report)
@@ -260,9 +279,10 @@ export function SavedReports({
             <option value="" disabled>
               Current assessment
             </option>
-            {history.data.map((report) => (
+            {reports.map((report) => (
               <option key={report.id} value={report.snapshot.result.runId}>
-                GPT · {new Date(report.snapshot.approvedAt).toLocaleString()} ·{" "}
+                {name} · {new Date(report.snapshot.approvedAt).toLocaleString()}{" "}
+                ·{" "}
                 {provisionalScore(report.snapshot.result.assessment) ??
                   "Unranked"}
                 {report.snapshot.result.input.inputRevision !== idea.revision

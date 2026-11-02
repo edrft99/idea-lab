@@ -78,6 +78,7 @@ describe("roundtable API boundary", () => {
     expect(response.headers.get("Cache-Control")).toBe("private, no-store");
     const body: any = await response.json();
     expect(body.data.gpt.enabled).toBe(false);
+    expect(body.data.claude.enabled).toBe(false);
   });
   it("returns only public connection metadata without contacting a provider", async () => {
     const fetcher = vi.spyOn(globalThis, "fetch");
@@ -125,4 +126,50 @@ describe("saved report reads", () => {
     expect(response.status).toBe(400);
     expect(fetcher).not.toHaveBeenCalled();
   });
+});
+
+describe("Claude connection boundary", () => {
+  it("exposes Claude availability only when protected model, key and policy are configured", async () => {
+    const fetcher = vi.spyOn(globalThis, "fetch");
+    const response = await runWithIdeaRuntime(
+      {
+        ...env,
+        IDEA_LAB_CLAUDE_MODEL: "synthetic-claude",
+        IDEA_LAB_CLAUDE_API_KEY: "synthetic-anthropic-key",
+        IDEA_LAB_CLAUDE_RETENTION_NOTICE: "Synthetic API policy.",
+      },
+      () => connection(),
+    );
+    const body = (await response.json()) as any;
+    expect(body.data.claude.enabled).toBe(true);
+    expect(body.data.claude.profile.endpoint).toBe(
+      "https://api.anthropic.com/v1/",
+    );
+    expect(body.data.claude.profile.requestStorage).not.toContain(
+      "store=false",
+    );
+    expect(JSON.stringify(body)).not.toContain("synthetic-anthropic-key");
+    expect(fetcher).not.toHaveBeenCalled();
+  });
+  it.each([prepare, commit])(
+    "rejects an unsupported reviewer before accessing model or Notion",
+    async (handler) => {
+      const fetcher = vi.spyOn(globalThis, "fetch");
+      const req = new Request(
+        "https://idea.test/api/roundtable/prepare?reviewer=outside",
+        {
+          method: "POST",
+          headers: {
+            Origin: "https://idea.test",
+            "Content-Type": "application/json",
+          },
+          body: "{}",
+        },
+      );
+      expect((await runWithIdeaRuntime(env, () => handler(req))).status).toBe(
+        400,
+      );
+      expect(fetcher).not.toHaveBeenCalled();
+    },
+  );
 });

@@ -1,3 +1,5 @@
+import { checkedClaudeConfig, type ClaudeConfig } from "./claude-config";
+import { reviewerName } from "./model";
 import type { AutoSaveResult, RoundtableReportService } from "./reports";
 import { AppError } from "../ideas/errors";
 import { digest, Operations } from "../ideas/operations";
@@ -21,9 +23,9 @@ import {
   type RoundtableRequest,
 } from "./model";
 export class RoundtableService {
-  private config: AIConfig | OpenAIConfig;
+  private config: AIConfig | OpenAIConfig | ClaudeConfig;
   constructor(
-    config: AIConfig | OpenAIConfig,
+    config: AIConfig | OpenAIConfig | ClaudeConfig,
     private repository: NotionRepository,
     private operations: Operations,
     private provider: Pick<GPTReviewer, "evaluate">,
@@ -34,9 +36,19 @@ export class RoundtableService {
     private secrets: string[] = [],
   ) {
     this.config =
-      config.provider === "openai-responses"
-        ? checkedOpenAIConfig(config)
-        : checkedAIConfig(config);
+      config.provider === "anthropic-messages"
+        ? checkedClaudeConfig(config)
+        : config.provider === "openai-responses"
+          ? checkedOpenAIConfig(config)
+          : checkedAIConfig(config);
+  }
+  private get participant() {
+    return this.config.provider === "anthropic-messages"
+      ? ("claude" as const)
+      : ("gpt" as const);
+  }
+  private get name() {
+    return reviewerName(this.participant);
   }
   private normalized(input: RoundtableRequest) {
     const command = requestSchema.parse(input);
@@ -74,7 +86,7 @@ export class RoundtableService {
     if (idea.revision !== command.inputRevision)
       throw new AppError(
         "STALE_IDEA",
-        "This idea changed. Reload before requesting GPT’s assessment.",
+        `This idea changed. Reload before requesting ${this.name}’s assessment.`,
         409,
       );
   }
@@ -85,7 +97,7 @@ export class RoundtableService {
     const receipt = await this.operations.issue(
       actor,
       await digest(JSON.stringify(command)),
-      "roundtable-gpt",
+      "roundtable-" + this.participant,
       command.ideaId,
       await this.context(),
     );
@@ -95,6 +107,8 @@ export class RoundtableService {
       command,
       profile: {
         ...aiProfile(this.config, promptVersion),
+        localRetention:
+          "Completed reports and their selected brief are automatically saved to Notion. The operation ledger stores status and hashes only.",
         autoSaveReport: true,
       },
     };
@@ -109,14 +123,14 @@ export class RoundtableService {
       hash = await digest(JSON.stringify(command));
     const op = await this.operations.read(token, actor);
     if (
-      op.action !== "roundtable-gpt" ||
+      op.action !== "roundtable-" + this.participant ||
       op.target !== command.ideaId ||
       op.payload_hash !== hash ||
       op.expected_revision !== (await this.context())
     )
       throw new AppError(
         "APPROVAL_CHANGED",
-        "The content or GPT connection changed. Review the request again.",
+        `The content or ${this.name} connection changed. Review the request again.`,
         409,
       );
     if (op.status === "done") {
@@ -132,7 +146,7 @@ export class RoundtableService {
         };
       throw new AppError(
         "AI_RESULT_NOT_RETAINED",
-        "GPT already completed this request. Check saved history; this request will not run GPT again.",
+        `${this.name} already completed this request. Check saved history; this request will not run it again.`,
         409,
       );
     }
@@ -158,7 +172,7 @@ export class RoundtableService {
         format: "idea-lab-roundtable",
         version: 1,
         runId: op.id,
-        participant: "gpt",
+        participant: this.participant,
         stage: "independent",
         input: command,
         inputHash: hash,
@@ -186,8 +200,7 @@ export class RoundtableService {
         storage = {
           status: "failed",
           operationId: null,
-          message:
-            "GPT completed, but saving to Notion could not be confirmed. The assessment is available below; GPT will not be run again.",
+          message: `${this.name} completed, but saving to Notion could not be confirmed. The assessment is available below; the model will not be run again.`,
         };
       }
       return { result, storage };
@@ -200,8 +213,10 @@ export class RoundtableService {
       } catch {}
       if (dispatched)
         throw new AppError(
-          "GPT_REQUEST_UNCONFIRMED",
-          "No usable GPT result was retained. The request may have been processed or charged. It will not be replayed. Check request status before deciding whether to review a new request.",
+          this.participant === "claude"
+            ? "CLAUDE_REQUEST_UNCONFIRMED"
+            : "GPT_REQUEST_UNCONFIRMED",
+          `No usable ${this.name} result was retained. The request may have been processed or charged. It will not be replayed. Check request status before deciding whether to review a new request.`,
           503,
           undefined,
           true,
@@ -220,10 +235,10 @@ export async function roundtableRequestStatus(
   const op = byId
     ? await operations.readById(token, actor)
     : await operations.read(token, actor);
-  if (op.action !== "roundtable-gpt")
+  if (!["roundtable-gpt", "roundtable-claude"].includes(op.action))
     throw new AppError(
       "INVALID_OPERATION",
-      "This is not a GPT roundtable request.",
+      "This is not a roundtable model request.",
       400,
     );
   const report =
@@ -244,7 +259,7 @@ export async function roundtableRequestStatus(
     resultRetained: false,
     message:
       op.status === "done"
-        ? "GPT completed this request. Its result is in the original browser or a private download; it cannot be fetched from the ledger."
+        ? "The reviewer completed this request. Its result is in the original browser or a private download; it cannot be fetched from the ledger."
         : op.status === "pending" || op.status === "failed"
           ? "No GPT dispatch was confirmed for this request."
           : "The request is unconfirmed and will not be replayed. Check the provider’s usage before authorising a replacement request.",

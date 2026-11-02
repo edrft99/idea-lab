@@ -64,12 +64,16 @@ export const resultSchema = z
     format: z.literal("idea-lab-roundtable"),
     version: z.literal(1),
     runId: z.string().regex(/^[a-f0-9]{64}$/),
-    participant: z.literal("gpt"),
+    participant: z.enum(["gpt", "claude"]),
     stage: z.literal("independent"),
     input: requestSchema,
     inputHash: z.string().regex(/^[a-f0-9]{64}$/),
     assessment: assessmentSchema,
-    provider: z.enum(["openai-responses", "azure-openai-responses"]),
+    provider: z.enum([
+      "openai-responses",
+      "azure-openai-responses",
+      "anthropic-messages",
+    ]),
     model: z.string().min(1).max(200),
     resolvedModel: z.string().min(1).max(200),
     endpoint: z.string().url(),
@@ -86,10 +90,20 @@ export const resultSchema = z
       .strict()
       .nullable(),
   })
-  .strict();
+  .strict()
+  .refine(
+    (value) =>
+      (value.participant === "claude") ===
+      (value.provider === "anthropic-messages"),
+    { message: "Reviewer and provider do not match" },
+  );
 export type RoundtableResult = z.infer<typeof resultSchema>;
 export function decodeResult(raw: string) {
   if (new TextEncoder().encode(raw).byteLength > 100000)
     throw new Error("Choose a roundtable result smaller than 100 KB.");
   return resultSchema.parse(JSON.parse(raw));
 }
+
+export type ActiveReviewer = "gpt" | "claude";
+export const reviewerName = (id: ActiveReviewer) =>
+  id === "claude" ? "Claude" : "GPT";

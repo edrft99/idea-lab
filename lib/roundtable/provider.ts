@@ -66,13 +66,7 @@ export class GPTReviewer {
   evaluate(command: RoundtableRequest, signal?: AbortSignal) {
     return this.transport.generate(
       {
-        payload: {
-          rubricVersion,
-          weights: { feasibility: 1, success: 1, value: 1 },
-          selectedEvidence: command.selection,
-          successCriteria: command.successCriteria,
-          constraints: command.constraints,
-        },
+        payload: assessmentPayload(command),
         instructions,
         schema: reportJSONSchema,
         name: "idea_lab_roundtable_independent",
@@ -90,4 +84,14 @@ export class GPTReviewer {
       signal,
     );
   }
+}
+
+export function assessmentPayload(command: RoundtableRequest) {
+  return {
+    rubricVersion,
+    weights: { feasibility: 1, success: 1, value: 1 },
+    selectedEvidence: command.selection,
+    successCriteria: command.successCriteria,
+    constraints: command.constraints,
+  };
 }

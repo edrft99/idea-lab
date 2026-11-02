@@ -68,10 +68,66 @@ export function RoundtableConfiguration() {
       <Link className="text-link" href="/roundtable">
         Open the roundtable →
       </Link>
+      <ClaudeConfiguration />
       <p>
-        Claude, Grok and GitHub Copilot integrations follow GPT. Their seats are
-        visible but do not make requests yet.
+        Grok and GitHub Copilot are next. Peer discussion remains a future
+        stage.
       </p>
     </section>
+  );
+}
+
+function ClaudeConfiguration() {
+  const r = useResource<{
+    claude: {
+      enabled: boolean;
+      message?: string;
+      profile?: { deployment: string; retentionNotice: string };
+    };
+  }>("/api/roundtable/status");
+  return (
+    <div className="mt-panel">
+      <h2>Roundtable · Claude connection</h2>
+      {r.error ? (
+        <Failure error={r.error} retry={r.refresh} />
+      ) : !r.data ? (
+        <Loading />
+      ) : r.data.claude.enabled ? (
+        <>
+          <p>Configured model: {r.data.claude.profile?.deployment}</p>
+          <p>{r.data.claude.profile?.retentionNotice}</p>
+        </>
+      ) : (
+        <>
+          <p>{r.data.claude.message}</p>
+          <details>
+            <summary>Claude connection setup</summary>
+            <p>Add these protected Site runtime settings:</p>
+            <ul>
+              <li>
+                <code>IDEA_LAB_CLAUDE_MODEL</code>: an Anthropic model
+                supporting JSON schema structured outputs
+              </li>
+              <li>
+                <code>IDEA_LAB_CLAUDE_API_KEY</code>: your Anthropic API
+                credential
+              </li>
+              <li>
+                <code>IDEA_LAB_CLAUDE_RETENTION_NOTICE</code>: the retention
+                terms for your Anthropic API account
+              </li>
+            </ul>
+            <p>
+              The Claude app relay and Claude subscription do not provide this
+              API credential. Keep keys in protected settings.
+            </p>
+          </details>
+        </>
+      )}
+      <p>
+        Select Claude to reuse GPT’s assessed brief and the same scoring rubric.
+        Each reviewer has separate scores and automatically saved history.
+      </p>
+    </div>
   );
 }
