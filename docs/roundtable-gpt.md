@@ -2,7 +2,7 @@
 
 The Roundtable navigation item opens /roundtable, where the owner can select a canonical idea. Idea detail pages link directly to /ideas/:id/roundtable. The manual evaluation workbench remains available.
 
-The interface provides four selectable seats: GPT, Claude, Grok and GitHub Copilot. GPT is the first implemented independent reviewer. The remaining seats say Coming next and do not dispatch requests. Cross-review, final panel ranking, background runs and Notion report storage are future phases, described in evaluation-roundtable.md.
+The interface provides four selectable seats: GPT, Claude, Grok and GitHub Copilot. GPT is the first implemented independent reviewer. The remaining seats say Coming next and do not dispatch requests. Cross-review, final panel ranking and background runs are future phases, described in evaluation-roundtable.md.
 
 ## First assessment
 
@@ -12,7 +12,7 @@ The request includes only selected excerpts, success criteria, constraints, asse
 
 The report includes feasibility, success and value-offered ratings (0–100 or unknown), per-dimension evidence, confidence, strengths, risks, assumptions, expansions and experiments with measurable success signals. Application code computes the equally weighted mean only when all three scores are known. This is GPT's provisional assessment, not panel consensus or a calibrated success probability.
 
-Results stay in browser memory until downloaded. A private JSON download can be loaded for the same idea revision. Imported results are explicitly marked as having unverified provenance and cannot change a saved score. The original assessed brief is inspectable even if the editable form has since changed. There is no automatic Notion save or active-score projection in this first phase.
+New results stay in browser memory until downloaded or explicitly saved to Notion. The result shows Assessment not saved yet until the owner reviews and confirms Save assessment. A private JSON download can be loaded for the same idea revision. Imported results are explicitly marked as having unverified provenance and cannot change a saved score. The original assessed brief is inspectable even if the editable form has since changed. Saving the exact report appends an owner-scoped roundtable report to the configured Notion review database. Reopening the idea automatically loads its latest saved report, preferring the current idea revision, and offers a saved-history selector. Older revisions are visibly marked historical. Loading a current saved report also restores its approved brief for another request. There is no automatic Notion write during GPT generation, and saving history does not project an active idea score.
 
 ## Protected GPT configuration
 
@@ -37,7 +37,7 @@ Approvals bind owner, normalized selected content, canonical revision, model/pro
 
 The ledger retains hashes and request status, not the idea brief or generated report. A completed receipt cannot dispatch again. An ambiguous response records uncertain status; read-only status checks never contact GPT. Ordinary idea edits and the shared AI budget are unlocked after the model request ends because generation cannot mutate Notion. A replacement model request requires a fresh content review and may incur another charge. A process that disappears before finishing its running operation still requires operator reconciliation; there is no unattended recovery worker.
 
-Recent saves in Settings identifies GPT roundtable requests and checks status. It does not interpret a result digest as a Notion page ID. If the browser loses a completed result before downloading it, the ledger cannot recover the text.
+Recent saves in Settings identifies GPT roundtable requests and checks status. It does not interpret a result digest as a Notion page ID. If the browser loses an unsaved completed result before downloading it, the ledger cannot recover the text. A report explicitly saved to Notion can be reloaded without another provider request. Save approvals bind the exact result and source run to the owner and idea revision; modified or fabricated AI provenance is rejected. Saves are idempotent per GPT run, and ambiguous Notion writes can be reconciled without replay.
 
 ## Verification
 
@@ -53,3 +53,10 @@ Each seat uses its vendor mark with three visible score badges: F (feasibility),
 Select a reviewer to inspect its own scores and evidence. The detail panel groups its report into Overview, Risks, Expand and Test next. Each score expands to show its evidence. Selecting an unconnected reviewer hides GPT’s report and shows the selected provider’s empty scores. The idea brief collapses after a result and can be reopened to prepare another request. Reading score evidence, switching report sections and selecting a seat make no provider calls.
 
 Desktop uses a circular table arrangement and a scrollable selected-reviewer panel; mobile uses a four-seat grid and a full-height panel, with selection scrolling the panel into view. Vendor marks are bundled locally with LobeHub’s MIT licence and source attribution in public/vendors/.
+
+
+## Saved report verification
+
+Roundtable report saving uses the existing Notion review schema and a versioned immutable `roundtable-report-v1` snapshot containing the full result, owner hash, approval operation, time and result digest. This is separate from legacy evaluation dimensions and does not overwrite a manually selected score. The server checks the original completed GPT-run digest before accepting a save or returning saved history. Downloaded original results can be saved when their original run proof and current idea revision still match.
+
+Prepare performs reads and issues a five-minute approval; Confirm save to Notion performs the append. Duplicate saves return the existing report. Interrupted writes retain their save lock until a read-only status check locates the operation-marked Notion record and verifies its payload. Settings → Recent saves links to the idea’s roundtable and reconciles report-save operations. No database migration or additional runtime credential is required. No historical browser-only report can be recovered after its text has already been lost.

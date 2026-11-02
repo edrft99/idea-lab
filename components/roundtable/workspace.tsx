@@ -1,4 +1,5 @@
 "use client";
+import { SavedReports } from "./saved-reports";
 import { useRef, useState } from "react";
 import { ReviewerAssessment } from "./reviewer-assessment";
 import { VendorMark, type ReviewerId } from "./vendor-mark";
@@ -166,6 +167,7 @@ function Roundtable({ idea }: { idea?: Idea }) {
     >({}),
     [criteria, setCriteria] = useState(""),
     [constraints, setConstraints] = useState("");
+  const [saving, setSaving] = useState(false);
   const [busy, setBusy] = useState(false),
     [receipt, setReceipt] = useState<Receipt | null>(null),
     [result, setResult] = useState<RoundtableResult | null>(null),
@@ -177,7 +179,7 @@ function Roundtable({ idea }: { idea?: Idea }) {
   const reviewerPanel = useRef<HTMLElement>(null);
   const guard = useRef(false),
     file = useRef<HTMLInputElement>(null);
-  const locked = busy || !!receipt || uncertain;
+  const locked = busy || saving || !!receipt || uncertain;
   const gpt = profile.data?.gpt,
     seat = seats.find((s) => s.id === selected)!;
   function state(id: string) {
@@ -254,7 +256,7 @@ function Roundtable({ idea }: { idea?: Idea }) {
       setReceipt(null);
       setSelected("gpt");
       setMessage(
-        "GPT’s independent assessment is ready. No idea or saved score was changed.",
+        "GPT’s assessment is ready but not saved yet. Choose Save assessment to keep it in Notion.",
       );
     } catch (e) {
       const unknown =
@@ -400,6 +402,24 @@ function Roundtable({ idea }: { idea?: Idea }) {
           <LockKeyhole size={14} />
         </li>
       </ol>
+      {idea && (
+        <SavedReports
+          idea={idea}
+          onBusyChange={setSaving}
+          result={result}
+          busy={busy || !!receipt || uncertain}
+          onLoad={(saved) => {
+            setResult(saved);
+            setRestored(false);
+            setSelected("gpt");
+            if (saved.input.inputRevision === idea.revision) {
+              setSelection(saved.input.selection);
+              setCriteria(saved.input.successCriteria);
+              setConstraints(saved.input.constraints);
+            }
+          }}
+        />
+      )}
       <div className="rt-layout">
         <section
           className="panel rt-table-panel"
@@ -729,7 +749,7 @@ function Roundtable({ idea }: { idea?: Idea }) {
                   <button
                     type="button"
                     className="site-primary"
-                    disabled={busy || !gpt?.enabled}
+                    disabled={busy || saving || !gpt?.enabled}
                     onClick={prepare}
                   >
                     {busy ? (
@@ -818,8 +838,9 @@ function Roundtable({ idea }: { idea?: Idea }) {
                       <br />
                       {receipt.profile.requestStorage}
                       <br />
-                      Results remain in this browser until you download them.
-                      The server ledger stores request status and hashes only.
+                      Results remain in this browser until you download them or
+                      save the assessment to Notion. The server ledger stores
+                      request status and hashes only.
                     </dd>
                   </div>
                   <div>
