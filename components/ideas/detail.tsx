@@ -83,9 +83,15 @@ export function Detail({ id }: { id: string }) {
                 </Link>
                 <Link
                   className="site-secondary"
+                  href={"/ideas/" + id + "/roundtable"}
+                >
+                  Roundtable review
+                </Link>
+                <Link
+                  className="site-secondary"
                   href={"/ideas/" + id + "/evaluate"}
                 >
-                  Evaluate idea
+                  Manual evaluation
                 </Link>
               </>
             )}

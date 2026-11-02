@@ -61,7 +61,19 @@ const empty = (): DraftState => ({
   nextAction: "",
 });
 export function EvaluationWorkspace({ id }: { id?: string }) {
-  return id ? <Bound key={id} id={id} /> : <Workbench />;
+  return (
+    <>
+      <div className="page" style={{ paddingBottom: 0 }}>
+        <Link
+          className="text-link"
+          href={id ? "/ideas/" + id + "/roundtable" : "/roundtable"}
+        >
+          Try the idea roundtable <span aria-hidden="true">→</span>
+        </Link>
+      </div>
+      {id ? <Bound key={id} id={id} /> : <Workbench />}
+    </>
+  );
 }
 function Bound({ id }: { id: string }) {
   const resource = useResource<IdeaDetail>("/api/ideas/" + id);

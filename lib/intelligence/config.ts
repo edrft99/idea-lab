@@ -70,7 +70,7 @@ export function aiConfig(): AIConfig {
   });
 }
 export function aiProfile(
-  c: AIConfig,
+  c: AIConfig | import("./openai-config").OpenAIConfig,
   taskPromptVersion: string = promptVersion,
 ) {
   return {

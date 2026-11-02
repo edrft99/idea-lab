@@ -1,3 +1,4 @@
+import { RoundtableConfiguration } from "@/components/roundtable/configuration";
 import { ClaudeConnections } from "@/components/claude-auth/connections";
 import { AIConfiguration } from "@/components/intelligence/assessment";
 import Link from "@/components/navigation-link";
@@ -43,6 +44,7 @@ export default function Page() {
           Capture an idea manually
         </Link>
       </section>
+      <RoundtableConfiguration />
       <AIConfiguration />
       <ClaudeConnections />
       <RecentSaves />

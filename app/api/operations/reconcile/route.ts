@@ -61,7 +61,9 @@ export async function POST(request: Request) {
                   parsed.data.operationId,
                   user.userId,
                 )
-              : ["ai-evaluate", "ai-extract"].includes(operation.action)
+              : ["ai-evaluate", "ai-extract", "roundtable-gpt"].includes(
+                    operation.action,
+                  )
                 ? aiRequestStatus(operation)
                 : operation.action.startsWith("assessment-")
                   ? await assessmentService().reconcile(

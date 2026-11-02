@@ -4,6 +4,7 @@ import { usePathname } from "next/navigation";
 import { useEffect, useState, type ReactNode } from "react";
 import {
   FlaskConical,
+  UsersRound,
   LayoutDashboard,
   Compass,
   Inbox,
@@ -30,6 +31,7 @@ export function Shell({ children }: { children: ReactNode }) {
     "/sources": "Sources & imports",
     "/settings": "Settings",
     "/evaluations": "Scoring workbench",
+    "/roundtable": "Idea roundtable",
     "/analyst": "Idea analyst",
   };
   const breadcrumb =
@@ -39,11 +41,13 @@ export function Shell({ children }: { children: ReactNode }) {
       : path.startsWith("/capture/assistant/")
         ? "Review assistant capture"
         : path.startsWith("/ideas/")
-          ? path.endsWith("/evaluate")
-            ? "Evaluate idea"
-            : path.endsWith("/edit")
-              ? "Edit idea"
-              : "Idea detail"
+          ? path.endsWith("/roundtable")
+            ? "Idea roundtable"
+            : path.endsWith("/evaluate")
+              ? "Evaluate idea"
+              : path.endsWith("/edit")
+                ? "Edit idea"
+                : "Idea detail"
           : path.startsWith("/review/assessments/")
             ? "Assessment proposal"
             : path.startsWith("/review/proposals/")
@@ -66,10 +70,12 @@ export function Shell({ children }: { children: ReactNode }) {
     document.documentElement.dataset.theme = !dark ? "dark" : "light";
     localStorage.setItem("idea-lab-theme", !dark ? "dark" : "light");
   }
+  const navPath = path.endsWith("/roundtable") ? "/roundtable" : path;
   const links = [
     { href: "/", name: "Overview", icon: LayoutDashboard },
     { href: "/ideas", name: "Idea explorer", icon: Compass },
     { href: "/review", name: "Review center", icon: Inbox },
+    { href: "/roundtable", name: "Roundtable", icon: UsersRound },
     { href: "/sources", name: "Sources & imports", icon: Layers3 },
   ];
   return (
@@ -106,12 +112,12 @@ export function Shell({ children }: { children: ReactNode }) {
               href={l.href}
               onClick={() => setOpen(false)}
               aria-current={
-                (l.href === "/" ? path === "/" : path.startsWith(l.href))
+                (l.href === "/" ? navPath === "/" : navPath.startsWith(l.href))
                   ? "page"
                   : undefined
               }
               className={
-                (l.href === "/" ? path === "/" : path.startsWith(l.href))
+                (l.href === "/" ? navPath === "/" : navPath.startsWith(l.href))
                   ? "nav-item selected"
                   : "nav-item"
               }

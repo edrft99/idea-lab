@@ -1,3 +1,4 @@
+import { checkedOpenAIConfig, type OpenAIConfig } from "./openai-config";
 import { AppError } from "../ideas/errors";
 import { redact } from "../imports/staging";
 import { checkedAIConfig, type AIConfig } from "./config";
@@ -58,14 +59,17 @@ export async function boundedJSON(response: Response, maximum = 262144) {
   }
 }
 
-export class AzureStructuredResponses {
-  private config: AIConfig;
+class StructuredResponses {
+  private config: AIConfig | OpenAIConfig;
   constructor(
-    config: AIConfig,
+    config: AIConfig | OpenAIConfig,
     private fetcher: typeof fetch = fetch,
     private extraSecrets: string[] = [],
   ) {
-    this.config = checkedAIConfig(config);
+    this.config =
+      config.provider === "openai-responses"
+        ? checkedOpenAIConfig(config)
+        : checkedAIConfig(config);
   }
   async generate<T>(
     request: {
@@ -84,7 +88,12 @@ export class AzureStructuredResponses {
       const response = await this.fetcher(c.endpoint + "responses", {
         method: "POST",
         redirect: "manual",
-        headers: { "Content-Type": "application/json", "api-key": c.key },
+        headers: {
+          "Content-Type": "application/json",
+          ...(c.provider === "openai-responses"
+            ? { Authorization: "Bearer " + c.key }
+            : { "api-key": c.key }),
+        },
         signal: signal
           ? AbortSignal.any([controller.signal, signal])
           : controller.signal,
@@ -223,5 +232,24 @@ export class AzureStructuredResponses {
       controller.abort();
       clearTimeout(timer);
     }
+  }
+}
+
+export class AzureStructuredResponses extends StructuredResponses {
+  constructor(
+    config: AIConfig,
+    fetcher: typeof fetch = fetch,
+    secrets: string[] = [],
+  ) {
+    super(checkedAIConfig(config), fetcher, secrets);
+  }
+}
+export class OpenAIStructuredResponses extends StructuredResponses {
+  constructor(
+    config: OpenAIConfig,
+    fetcher: typeof fetch = fetch,
+    secrets: string[] = [],
+  ) {
+    super(checkedOpenAIConfig(config), fetcher, secrets);
   }
 }

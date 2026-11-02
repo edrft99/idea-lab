@@ -16,7 +16,7 @@ import {
 } from "./config";
 import type { AssessmentProvider } from "./provider";
 export function aiRequestStatus(op: Operation) {
-  if (!["ai-evaluate", "ai-extract"].includes(op.action))
+  if (!["ai-evaluate", "ai-extract", "roundtable-gpt"].includes(op.action))
     throw new AppError("INVALID_OPERATION", "This is not an AI request.", 400);
   return {
     status: op.status,
@@ -24,7 +24,7 @@ export function aiRequestStatus(op: Operation) {
     message:
       op.status === "done"
         ? "The request completed. Its result is retained only in the requesting browser or an explicitly downloaded/saved proposal."
-        : op.status === "running"
+        : ["running", "uncertain"].includes(op.status)
           ? "This request is still unconfirmed. It will not be replayed."
           : "No retained AI result is available from this request. A new request requires a new transmission review.",
   };
