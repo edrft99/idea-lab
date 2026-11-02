@@ -51,71 +51,73 @@ export async function POST(request: Request) {
       );
     return Response.json(
       {
-        data:
-          operation.action === "roundtable-gpt"
-            ? await roundtableRequestStatus(
-                new Operations(operationalDB()),
+        data: ["roundtable-gpt", "roundtable-claude"].includes(operation.action)
+          ? await roundtableRequestStatus(
+              new Operations(operationalDB()),
+              parsed.data.operationId,
+              user.userId,
+              roundtableReportService(),
+              true,
+            )
+          : ["roundtable-save", "roundtable-autosave"].includes(
+                operation.action,
+              )
+            ? await roundtableReportService().reconcile(
                 parsed.data.operationId,
                 user.userId,
-                roundtableReportService(),
-                true,
               )
-            : ["roundtable-save", "roundtable-autosave"].includes(
-                  operation.action,
-                )
-              ? await roundtableReportService().reconcile(
+            : operation.action === "delete-idea"
+              ? await deletionService().status(
                   parsed.data.operationId,
                   user.userId,
+                  true,
                 )
-              : operation.action === "delete-idea"
-                ? await deletionService().status(
+              : operation.action.startsWith("semantic-")
+                ? await semanticCoordinator().reconcile(
                     parsed.data.operationId,
                     user.userId,
-                    true,
                   )
-                : operation.action.startsWith("semantic-")
-                  ? await semanticCoordinator().reconcile(
-                      parsed.data.operationId,
-                      user.userId,
-                    )
-                  : ["ai-evaluate", "ai-extract", "roundtable-gpt"].includes(
-                        operation.action,
+                : [
+                      "ai-evaluate",
+                      "ai-extract",
+                      "roundtable-gpt",
+                      "roundtable-claude",
+                    ].includes(operation.action)
+                  ? aiRequestStatus(operation)
+                  : operation.action.startsWith("assessment-")
+                    ? await assessmentService().reconcile(
+                        parsed.data.operationId,
+                        user.userId,
                       )
-                    ? aiRequestStatus(operation)
-                    : operation.action.startsWith("assessment-")
-                      ? await assessmentService().reconcile(
+                    : operation.action.startsWith("proposal-")
+                      ? await proposalService().reconcile(
                           parsed.data.operationId,
                           user.userId,
                         )
-                      : operation.action.startsWith("proposal-")
-                        ? await proposalService().reconcile(
+                      : operation.action === "merge-ideas"
+                        ? await mergeService().reconcile(
                             parsed.data.operationId,
                             user.userId,
                           )
-                        : operation.action === "merge-ideas"
-                          ? await mergeService().reconcile(
+                        : operation.action === "related-link"
+                          ? await linkService().reconcile(
                               parsed.data.operationId,
                               user.userId,
                             )
-                          : operation.action === "related-link"
-                            ? await linkService().reconcile(
+                          : operation.action.startsWith("evaluation-")
+                            ? await evaluationService().reconcile(
                                 parsed.data.operationId,
                                 user.userId,
                               )
-                            : operation.action.startsWith("evaluation-")
-                              ? await evaluationService().reconcile(
+                            : operation.action === "review-decision"
+                              ? await reviewService().reconcile(
                                   parsed.data.operationId,
                                   user.userId,
                                 )
-                              : operation.action === "review-decision"
-                                ? await reviewService().reconcile(
-                                    parsed.data.operationId,
-                                    user.userId,
-                                  )
-                                : await writeService().reconcileId(
-                                    parsed.data.operationId,
-                                    user.userId,
-                                  ),
+                              : await writeService().reconcileId(
+                                  parsed.data.operationId,
+                                  user.userId,
+                                ),
       },
       { headers: { "Cache-Control": "private, no-store" } },
     );

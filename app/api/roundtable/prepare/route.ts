@@ -6,6 +6,9 @@ export const dynamic = "force-dynamic";
 export async function POST(request: Request) {
   try {
     const user = await authorizeOwner();
+    const reviewer = new URL(request.url).searchParams.get("reviewer") ?? "gpt";
+    if (reviewer !== "gpt" && reviewer !== "claude")
+      throw new AppError("INVALID_REVIEWER", "Choose GPT or Claude.", 400);
     checkOrigin(request);
     const parsed = requestSchema.safeParse(await jsonBody(request));
     if (!parsed.success)
@@ -15,7 +18,12 @@ export async function POST(request: Request) {
         400,
       );
     return Response.json(
-      { data: await roundtableService().prepare(parsed.data, user.userId) },
+      {
+        data: await roundtableService(reviewer).prepare(
+          parsed.data,
+          user.userId,
+        ),
+      },
       { headers: { "Cache-Control": "private, no-store" } },
     );
   } catch (error) {

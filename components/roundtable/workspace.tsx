@@ -41,6 +41,7 @@ import {
   requestSchema,
   resultSchema,
   rubricVersion,
+  type ActiveReviewer,
   type RoundtableRequest,
   type RoundtableResult,
 } from "@/lib/roundtable/model";
@@ -56,9 +57,10 @@ type Profile = {
   timeoutMs: number;
   requestStorage: string;
 };
-type Status = {
-  gpt: { enabled: boolean; profile?: Profile; message?: string };
-};
+type Status = Record<
+  ActiveReviewer,
+  { enabled: boolean; profile?: Profile; message?: string }
+>;
 type Receipt = {
   approvalToken: string;
   expiresAt: string;
@@ -169,10 +171,28 @@ function Roundtable({ idea }: { idea?: Idea }) {
     [criteria, setCriteria] = useState(""),
     [constraints, setConstraints] = useState("");
   const [saving, setSaving] = useState(false);
-  const [storage, setStorage] = useState<AutoSaveResult | null>(null);
+  const [storages, setStorages] = useState<
+    Partial<Record<ActiveReviewer, AutoSaveResult | null>>
+  >({});
+  const activeReviewer: ActiveReviewer =
+    selected === "claude" ? "claude" : "gpt";
+  const name = activeReviewer === "claude" ? "Claude" : "GPT";
+  const storage = storages[activeReviewer] ?? null;
+  function setStorage(value: AutoSaveResult | null) {
+    setStorages((previous) => ({ ...previous, [activeReviewer]: value }));
+  }
+  const [results, setResults] = useState<
+    Partial<Record<ActiveReviewer, RoundtableResult | null>>
+  >({});
+  const result = results[activeReviewer] ?? null;
+  function setResult(value: RoundtableResult | null) {
+    setResults((previous) => ({
+      ...previous,
+      [value?.participant ?? activeReviewer]: value,
+    }));
+  }
   const [busy, setBusy] = useState(false),
     [receipt, setReceipt] = useState<Receipt | null>(null),
-    [result, setResult] = useState<RoundtableResult | null>(null),
     [error, setError] = useState(""),
     [message, setMessage] = useState(""),
     [uncertain, setUncertain] = useState(false),
@@ -182,24 +202,30 @@ function Roundtable({ idea }: { idea?: Idea }) {
   const guard = useRef(false),
     file = useRef<HTMLInputElement>(null);
   const locked = busy || saving || !!receipt || uncertain;
-  const gpt = profile.data?.gpt,
+  const gpt = profile.data?.[activeReviewer],
     seat = seats.find((s) => s.id === selected)!;
   function state(id: string) {
-    return id !== "gpt"
-      ? "Coming next"
-      : busy && receipt
-        ? "Reviewing…"
-        : result
-          ? "Assessment ready"
-          : uncertain
-            ? "Check request"
-            : gpt?.enabled
-              ? "Ready to review"
-              : profile.error
-                ? "Connection unavailable"
-                : !profile.data
-                  ? "Checking connection…"
-                  : "Connection needed";
+    if (id !== "gpt" && id !== "claude") return "Coming next";
+    if (busy && receipt && id === activeReviewer) return "Reviewing…";
+    if (results[id]) return "Assessment ready";
+    if (uncertain && id === activeReviewer) return "Check request";
+    return profile.data?.[id]?.enabled
+      ? "Ready to review"
+      : profile.error
+        ? "Connection unavailable"
+        : !profile.data
+          ? "Checking connection…"
+          : "Connection needed";
+  }
+  function reuseGPTBrief() {
+    const previous = results.gpt;
+    if (!previous || locked) return;
+    setSelection(previous.input.selection);
+    setCriteria(previous.input.successCriteria);
+    setConstraints(previous.input.constraints);
+    setMessage(
+      "Reusing the exact brief assessed by GPT. Review it below before sending to Claude.",
+    );
   }
   async function prepare() {
     if (guard.current || !idea) return;
@@ -221,10 +247,13 @@ function Roundtable({ idea }: { idea?: Idea }) {
           command.error.issues[0]?.message ?? "Complete the idea brief.",
         );
       setReceipt(
-        await requestData<Receipt>("/api/roundtable/prepare", {
-          method: "POST",
-          body: JSON.stringify(command.data),
-        }),
+        await requestData<Receipt>(
+          "/api/roundtable/prepare?reviewer=" + activeReviewer,
+          {
+            method: "POST",
+            body: JSON.stringify(command.data),
+          },
+        ),
       );
     } catch (e) {
       setError(
@@ -248,7 +277,7 @@ function Roundtable({ idea }: { idea?: Idea }) {
       const response = await requestData<{
         result: RoundtableResult;
         storage: AutoSaveResult;
-      }>("/api/roundtable/commit", {
+      }>("/api/roundtable/commit?reviewer=" + activeReviewer, {
         method: "POST",
         body: JSON.stringify({
           command: receipt.command,
@@ -258,11 +287,11 @@ function Roundtable({ idea }: { idea?: Idea }) {
       setResult(resultSchema.parse(response.result));
       setStorage(response.storage);
       setReceipt(null);
-      setSelected("gpt");
+      setSelected(response.result.participant);
       setMessage(
         response.storage?.status === "saved"
-          ? "GPT’s assessment is ready and automatically saved to Notion."
-          : "GPT’s assessment is ready. Automatic saving needs attention below; GPT will not be run again.",
+          ? `${name}’s assessment is ready and automatically saved to Notion.`
+          : `${name}’s assessment is ready. Automatic saving needs attention below; the model will not be run again.`,
       );
     } catch (e) {
       const unknown =
@@ -323,7 +352,7 @@ function Roundtable({ idea }: { idea?: Idea }) {
     );
     const a = document.createElement("a");
     a.href = url;
-    a.download = "idea-lab-gpt-assessment.json";
+    a.download = "idea-lab-" + result.participant + "-assessment.json";
     a.click();
     setTimeout(() => URL.revokeObjectURL(url), 1000);
   }
@@ -349,7 +378,7 @@ function Roundtable({ idea }: { idea?: Idea }) {
       setResult(loaded);
       setStorage(null);
       setRestored(true);
-      setSelected("gpt");
+      setSelected(loaded.participant);
       setMessage(
         "Loaded a private result file. Its provider provenance has not been verified by the server.",
       );
@@ -367,6 +396,8 @@ function Roundtable({ idea }: { idea?: Idea }) {
   }
   const selectedResult = result?.participant === selected ? result : null;
   function selectReviewer(id: ReviewerId) {
+    if (locked) return;
+    if (id === "claude" && results.gpt) reuseGPTBrief();
     setSelected(id);
     reviewerPanel.current?.scrollTo({ top: 0 });
     if (window.matchMedia("(max-width: 760px)").matches)
@@ -390,7 +421,7 @@ function Roundtable({ idea }: { idea?: Idea }) {
         </div>
         <span className="rt-release">
           <span />
-          GPT · first reviewer
+          GPT + Claude · independent reviewers
         </span>
       </header>
       <ol className="rt-stages" aria-label="Review stages">
@@ -398,7 +429,7 @@ function Roundtable({ idea }: { idea?: Idea }) {
           <span className="rt-stage-number">01</span>
           <div>
             <strong>Independent perspectives</strong>
-            <small>Start with GPT’s own assessment</small>
+            <small>Independent assessments from GPT and Claude</small>
           </div>
         </li>
         <li>
@@ -421,6 +452,26 @@ function Roundtable({ idea }: { idea?: Idea }) {
       {idea && (
         <SavedReports
           idea={idea}
+          participant={activeReviewer}
+          onHistory={(reports) => {
+            setResults((previous) => {
+              const next = { ...previous };
+              for (const reviewer of ["gpt", "claude"] as const) {
+                if (next[reviewer]) continue;
+                const candidates = reports.filter(
+                  (row) => row.snapshot.result.participant === reviewer,
+                );
+                const report =
+                  candidates.find(
+                    (row) =>
+                      row.snapshot.result.input.inputRevision === idea.revision,
+                  ) ?? candidates[0];
+                if (report)
+                  next[reviewer] = resultSchema.parse(report.snapshot.result);
+              }
+              return next;
+            });
+          }}
           onBusyChange={setSaving}
           result={result}
           storage={storage}
@@ -429,7 +480,7 @@ function Roundtable({ idea }: { idea?: Idea }) {
             setResult(saved);
             setStorage(null);
             setRestored(false);
-            setSelected("gpt");
+            setSelected(saved.participant);
             if (saved.input.inputRevision === idea.revision) {
               setSelection(saved.input.selection);
               setCriteria(saved.input.successCriteria);
@@ -472,6 +523,7 @@ function Roundtable({ idea }: { idea?: Idea }) {
                   (selected === s.id ? " is-selected" : "")
                 }
                 onClick={() => selectReviewer(s.id)}
+                disabled={locked}
                 aria-controls="rt-reviewer-detail"
                 aria-pressed={selected === s.id}
                 aria-label={s.name + ": " + state(s.id)}
@@ -487,9 +539,9 @@ function Roundtable({ idea }: { idea?: Idea }) {
                       aria-label={
                         labels[key] +
                         ": " +
-                        (result?.participant === s.id
-                          ? (result.assessment.ratings[key].score ??
-                            "not enough evidence")
+                        (!!results[s.id as ActiveReviewer]
+                          ? (results[s.id as ActiveReviewer]!.assessment
+                              .ratings[key].score ?? "not enough evidence")
                           : "not assessed")
                       }
                     >
@@ -501,8 +553,9 @@ function Roundtable({ idea }: { idea?: Idea }) {
                             : "V"}
                       </abbr>
                       <strong>
-                        {result?.participant === s.id
-                          ? (result.assessment.ratings[key].score ?? "—")
+                        {!!results[s.id as ActiveReviewer]
+                          ? (results[s.id as ActiveReviewer]!.assessment
+                              .ratings[key].score ?? "—")
                           : "—"}
                       </strong>
                     </span>
@@ -511,7 +564,12 @@ function Roundtable({ idea }: { idea?: Idea }) {
                 <strong>{s.name}</strong>
                 <small>
                   <i
-                    className={s.id === "gpt" && gpt?.enabled ? "ready" : ""}
+                    className={
+                      (s.id === "gpt" || s.id === "claude") &&
+                      profile.data?.[s.id]?.enabled
+                        ? "ready"
+                        : ""
+                    }
                   />
                   {state(s.id)}
                 </small>
@@ -542,8 +600,15 @@ function Roundtable({ idea }: { idea?: Idea }) {
         >
           <div className="rt-section-label">
             <span>AT THIS SEAT</span>
-            <span className={"rt-chip " + (selected === "gpt" ? "active" : "")}>
-              {selected === "gpt" ? "FIRST REVIEWER" : "COMING NEXT"}
+            <span
+              className={
+                "rt-chip " +
+                (selected === "gpt" || selected === "claude" ? "active" : "")
+              }
+            >
+              {selected === "gpt" || selected === "claude"
+                ? "INDEPENDENT REVIEWER"
+                : "COMING NEXT"}
             </span>
           </div>
           <span className={"rt-avatar rt-inspector-avatar " + seat.color}>
@@ -555,7 +620,7 @@ function Roundtable({ idea }: { idea?: Idea }) {
             <span className="rt-status-dot" />
             {state(selected)}
           </div>
-          {selected === "gpt" ? (
+          {selected === "gpt" || selected === "claude" ? (
             <>
               {profile.error ? (
                 <Failure error={profile.error} retry={profile.refresh} />
@@ -563,15 +628,17 @@ function Roundtable({ idea }: { idea?: Idea }) {
                 <p className="rt-model-label">
                   Model <strong>{gpt.profile?.deployment}</strong>
                   <br />
-                  {gpt.profile?.provider === "openai-responses"
-                    ? "OpenAI Responses API"
-                    : "Azure OpenAI"}
+                  {gpt.profile?.provider === "anthropic-messages"
+                    ? "Anthropic Messages API"
+                    : gpt.profile?.provider === "openai-responses"
+                      ? "OpenAI Responses API"
+                      : "Azure OpenAI"}
                 </p>
               ) : (
                 <div className="rt-connection-note">
                   <LockKeyhole size={16} />
                   <p>
-                    {gpt?.message || "Checking GPT connection…"}{" "}
+                    {gpt?.message || `Checking ${name} connection…`}{" "}
                     <Link href="/settings" className="text-link">
                       Open settings <ArrowUpRight size={12} />
                     </Link>
@@ -587,7 +654,7 @@ function Roundtable({ idea }: { idea?: Idea }) {
                 />
               ) : (
                 <>
-                  <h3>GPT’s scores</h3>
+                  <h3>{name}’s scores</h3>
                   <div className="rt-empty-scores">
                     {dimensions.map((key) => (
                       <div key={key}>
@@ -600,9 +667,9 @@ function Roundtable({ idea }: { idea?: Idea }) {
                   </div>
                   <p className="rt-agent-score-note">
                     No assessment yet. Complete the idea brief below to request
-                    GPT’s independent review.
+                    {name}’s independent review.
                   </p>
-                  <h3>What GPT will bring</h3>
+                  <h3>What {name} will bring</h3>
                   <ul className="rt-check-list">
                     <li>
                       <Check size={14} />A grounded viability assessment
@@ -682,14 +749,31 @@ function Roundtable({ idea }: { idea?: Idea }) {
                     Good questions start with the right context.
                   </h2>
                   <p>
-                    Choose what GPT can read. Edit or redact any excerpt before
-                    reviewing the request.
+                    Choose what {name} can read. Edit or redact any excerpt
+                    before reviewing the request.
                   </p>
                 </div>
                 <Link className="text-link" href={"/ideas/" + idea.id}>
                   View idea <ArrowUpRight size={14} />
                 </Link>
               </div>
+              {activeReviewer === "claude" && results.gpt && (
+                <div className="rt-save-warning">
+                  <p>
+                    Reuse the same excerpts, success criteria, constraints and
+                    scoring rubric that GPT assessed. Claude receives an
+                    independent brief, without GPT’s answers.
+                  </p>
+                  <button
+                    type="button"
+                    className="site-secondary"
+                    disabled={locked}
+                    onClick={reuseGPTBrief}
+                  >
+                    Reuse GPT’s assessed brief
+                  </button>
+                </div>
+              )}
               <fieldset disabled={locked} className="rt-fields">
                 <legend>Idea excerpts</legend>
                 <div className="rt-excerpt-options">
@@ -761,8 +845,8 @@ function Roundtable({ idea }: { idea?: Idea }) {
                 <div className="rt-brief-footer">
                   <p>
                     <ShieldCheck size={16} />
-                    One GPT request. Review exactly what leaves Idea Lab before
-                    sending.
+                    One {name} request. Review exactly what leaves Idea Lab
+                    before sending.
                   </p>
                   <button
                     type="button"
@@ -775,7 +859,7 @@ function Roundtable({ idea }: { idea?: Idea }) {
                     ) : (
                       <Sparkles size={15} />
                     )}
-                    Review GPT request <ArrowRight size={15} />
+                    Review {name} request <ArrowRight size={15} />
                   </button>
                 </div>
               )}
@@ -803,7 +887,7 @@ function Roundtable({ idea }: { idea?: Idea }) {
                     onClick={download}
                   >
                     <Download size={14} />
-                    Download GPT result
+                    Download {name} result
                   </button>
                 )}
               </div>
@@ -815,7 +899,7 @@ function Roundtable({ idea }: { idea?: Idea }) {
               >
                 <div className="eyebrow">REVIEW BEFORE SENDING</div>
                 <h2 id="rt-consent-title">
-                  One independent assessment from GPT.
+                  One independent assessment from {name}.
                 </h2>
                 <p>
                   Only the content below, the scoring rubric and assessment
@@ -825,7 +909,12 @@ function Roundtable({ idea }: { idea?: Idea }) {
                 <dl>
                   <div>
                     <dt>Destination</dt>
-                    <dd>{receipt.profile.endpoint}responses</dd>
+                    <dd>
+                      {receipt.profile.endpoint}
+                      {receipt.profile.provider === "anthropic-messages"
+                        ? "messages"
+                        : "responses"}
+                    </dd>
                   </div>
                   <div>
                     <dt>Configured model</dt>
@@ -879,7 +968,7 @@ function Roundtable({ idea }: { idea?: Idea }) {
                   )}
                 </pre>
                 <p>
-                  GPT’s completed assessment will be automatically saved to
+                  {name}’s completed assessment will be automatically saved to
                   Notion. There is no extra save step. Idea text and active
                   ranking remain unchanged; peer discussion comes later.
                 </p>
@@ -905,8 +994,8 @@ function Roundtable({ idea }: { idea?: Idea }) {
                       <ShieldCheck size={15} />
                     )}{" "}
                     {busy
-                      ? "GPT is reviewing & saving…"
-                      : "Approve & send to GPT"}
+                      ? `${name} is reviewing & saving…`
+                      : `Approve & send to ${name}`}
                   </button>
                 </div>
               </section>
@@ -919,8 +1008,8 @@ function Roundtable({ idea }: { idea?: Idea }) {
           <h2>Let’s check this request.</h2>
           <p>
             It may have been processed or charged. Checking its status does not
-            contact GPT or send it again. After a reload, use Settings → Recent
-            saves.
+            contact the reviewer or send it again. After a reload, use Settings
+            → Recent saves.
           </p>
           <button
             type="button"
@@ -934,8 +1023,8 @@ function Roundtable({ idea }: { idea?: Idea }) {
           {checked && (
             <>
               <p>
-                Completed results cannot be recovered from the ledger. A fresh
-                request needs a new content review and may incur another charge.
+                No saved result was found for this request. A fresh request
+                needs a new content review and may incur another charge.
               </p>
               <button
                 type="button"
@@ -951,7 +1040,7 @@ function Roundtable({ idea }: { idea?: Idea }) {
                   );
                 }}
               >
-                Review a new GPT request
+                Review a new {name} request
               </button>
             </>
           )}
@@ -972,8 +1061,9 @@ function Roundtable({ idea }: { idea?: Idea }) {
           <UsersRound size={17} /> BUILT FOR MORE PERSPECTIVES
         </span>
         <p>
-          GPT first. Claude, Grok and GitHub Copilot next. Each will bring an
-          independent view before reviewing the others.
+          Connect GPT and Claude for independent reviews. Grok and GitHub
+          Copilot are next. Each will bring an independent view before reviewing
+          the others.
         </p>
       </footer>
     </div>

@@ -165,9 +165,14 @@ export function RecentSaves() {
                               "ai-evaluate",
                               "ai-extract",
                               "roundtable-gpt",
+                              "roundtable-claude",
                             ].includes(op.action)
-                          ? op.action === "roundtable-gpt"
-                            ? "GPT roundtable assessment"
+                          ? ["roundtable-gpt", "roundtable-claude"].includes(
+                              op.action,
+                            )
+                            ? (op.action === "roundtable-claude"
+                                ? "Claude"
+                                : "GPT") + " roundtable assessment"
                             : op.action === "ai-extract"
                               ? "AI extraction request"
                               : "AI assessment request"
@@ -244,9 +249,12 @@ export function RecentSaves() {
               op.action !== "attach-file" &&
               op.action !== "delete-idea" &&
               !op.action.startsWith("semantic-") &&
-              !["ai-evaluate", "ai-extract", "roundtable-gpt"].includes(
-                op.action,
-              ) && (
+              ![
+                "ai-evaluate",
+                "ai-extract",
+                "roundtable-gpt",
+                "roundtable-claude",
+              ].includes(op.action) && (
                 <Link
                   className="text-link"
                   href={

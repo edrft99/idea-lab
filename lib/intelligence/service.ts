@@ -16,7 +16,14 @@ import {
 } from "./config";
 import type { AssessmentProvider } from "./provider";
 export function aiRequestStatus(op: Operation) {
-  if (!["ai-evaluate", "ai-extract", "roundtable-gpt"].includes(op.action))
+  if (
+    ![
+      "ai-evaluate",
+      "ai-extract",
+      "roundtable-gpt",
+      "roundtable-claude",
+    ].includes(op.action)
+  )
     throw new AppError("INVALID_OPERATION", "This is not an AI request.", 400);
   return {
     status: op.status,

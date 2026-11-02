@@ -17,6 +17,7 @@ export function ReviewerAssessment({
   onDownload: () => void;
 }) {
   const [section, setSection] = useState("overview");
+  const name = result.participant === "claude" ? "Claude" : "GPT";
   const assessment = result.assessment,
     score = provisionalScore(assessment);
   const sections = [
@@ -44,9 +45,12 @@ export function ReviewerAssessment({
         </span>
       </div>
       <h3 className="rt-agent-scores-title">
-        GPT’s scores <small>Click a score for its evidence</small>
+        {name}’s scores <small>Click a score for its evidence</small>
       </h3>
-      <div className="rt-agent-ratings" aria-label="GPT’s viability scores">
+      <div
+        className="rt-agent-ratings"
+        aria-label={name + "’s viability scores"}
+      >
         {dimensions.map((key) => {
           const rating = assessment.ratings[key];
           return (
@@ -82,7 +86,7 @@ export function ReviewerAssessment({
       <div
         className="rt-report-switcher"
         role="group"
-        aria-label="GPT assessment sections"
+        aria-label={name + " assessment sections"}
       >
         {sections.map((tab) => (
           <button
@@ -173,7 +177,7 @@ export function ReviewerAssessment({
       </details>
       <button type="button" className="site-secondary" onClick={onDownload}>
         <Download size={14} />
-        Download GPT report
+        Download {name} report
       </button>
       <p className="rt-agent-score-note">
         These provisional report scores do not replace your idea’s active

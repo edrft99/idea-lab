@@ -1,3 +1,4 @@
+import type { ClaudeConfig } from "../lib/roundtable/claude-config";
 import {
   RoundtableService,
   roundtableRequestStatus,
@@ -17,7 +18,7 @@ import {
 } from "./roundtable-fixtures";
 import { reviewTypes } from "../lib/proposals/repository";
 afterEach(() => vi.restoreAllMocks());
-async function setup() {
+async function setup(participant: "gpt" | "claude" = "gpt") {
   const memory = memoryDB(),
     ops = new Operations(memory.db),
     rows: any[] = [],
@@ -77,7 +78,7 @@ async function setup() {
   const source = await ops.issue(
     "owner",
     await digest(JSON.stringify(roundtableCommand)),
-    "roundtable-gpt",
+    "roundtable-" + participant,
     idea.id,
     "config-hash",
   );
@@ -85,12 +86,13 @@ async function setup() {
     format: "idea-lab-roundtable",
     version: 1,
     runId: source.id,
-    participant: "gpt",
+    participant,
     stage: "independent",
     input: roundtableCommand,
     inputHash: await digest(JSON.stringify(roundtableCommand)),
     assessment,
-    provider: gptConfig.provider,
+    provider:
+      participant === "claude" ? "anthropic-messages" : gptConfig.provider,
     model: gptConfig.deployment,
     resolvedModel: "synthetic-gpt-resolved",
     endpoint: gptConfig.endpoint,
@@ -426,5 +428,95 @@ describe("automatic storage coordination", () => {
     await ops.finish(edit.id, "failed");
     expect((await service.autoSave(result, "owner")).status).toBe("saved");
     expect(calls.filter((c) => c.path === "pages")).toHaveLength(1);
+  });
+});
+
+describe("Claude report storage and generation", () => {
+  const claude: ClaudeConfig = {
+    ...gptConfig,
+    provider: "anthropic-messages",
+    endpoint: "https://api.anthropic.com/v1/",
+    deployment: "synthetic-claude",
+  };
+  it("generates once, automatically saves Claude’s scores and recovers them without another dispatch", async () => {
+    const { service, repo, ops, calls } = await setup("claude");
+    const provider = {
+      evaluate: vi
+        .fn()
+        .mockResolvedValue({
+          value: assessment,
+          resolvedModel: "synthetic-claude",
+          responseId: "msg_synthetic",
+          usage: null,
+        }),
+    };
+    const generation = new RoundtableService(
+      claude,
+      repo,
+      ops,
+      provider,
+      service,
+    );
+    const receipt = await generation.prepare(roundtableCommand, "owner");
+    const response = await generation.execute(
+      receipt.command,
+      receipt.approvalToken,
+      "owner",
+    );
+    expect(response.result.participant).toBe("claude");
+    expect(response.result.input).toEqual(roundtableCommand);
+    expect(response.storage.status).toBe("saved");
+    expect((await ops.read(receipt.approvalToken, "owner")).action).toBe(
+      "roundtable-claude",
+    );
+    expect(await ops.countAIAttempts("owner", 0)).toBe(2);
+    expect(
+      (await new RoundtableReportService(repo, ops).list(idea.id, "owner"))[0]
+        .snapshot.result,
+    ).toEqual(response.result);
+    expect(
+      (
+        await generation.execute(
+          receipt.command,
+          receipt.approvalToken,
+          "owner",
+        )
+      ).result,
+    ).toEqual(response.result);
+    expect(
+      (
+        await roundtableRequestStatus(
+          ops,
+          receipt.approvalToken,
+          "owner",
+          service,
+        )
+      ).result,
+    ).toEqual(response.result);
+    expect(provider.evaluate).toHaveBeenCalledTimes(1);
+    expect(calls.filter((c) => c.path === "pages")).toHaveLength(1);
+    const gpt = new RoundtableService(gptConfig, repo, ops, provider, service);
+    await expect(
+      gpt.execute(receipt.command, receipt.approvalToken, "owner"),
+    ).rejects.toMatchObject({ code: "APPROVAL_CHANGED" });
+  });
+  it("reconciles an uncertain Claude save without repeating the write", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    const { service, result, lose, calls } = await setup("claude");
+    lose();
+    expect((await service.autoSave(result, "owner")).status).toBe("uncertain");
+    expect((await service.recover(result, "owner")).status).toBe("done");
+    expect(calls.filter((c) => c.path === "pages")).toHaveLength(1);
+  });
+  it("rejects relabeling a GPT run as a Claude result", async () => {
+    const { service, result } = await setup();
+    expect(
+      (
+        await service.autoSave(
+          { ...result, participant: "claude", provider: "anthropic-messages" },
+          "owner",
+        )
+      ).status,
+    ).toBe("failed");
   });
 });

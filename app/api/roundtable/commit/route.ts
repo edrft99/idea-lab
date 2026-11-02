@@ -7,6 +7,9 @@ export const dynamic = "force-dynamic";
 export async function POST(request: Request) {
   try {
     const user = await authorizeOwner();
+    const reviewer = new URL(request.url).searchParams.get("reviewer") ?? "gpt";
+    if (reviewer !== "gpt" && reviewer !== "claude")
+      throw new AppError("INVALID_REVIEWER", "Choose GPT or Claude.", 400);
     checkOrigin(request);
     const parsed = z
       .object({
@@ -23,7 +26,7 @@ export async function POST(request: Request) {
       );
     return Response.json(
       {
-        data: await roundtableService().execute(
+        data: await roundtableService(reviewer).execute(
           parsed.data.command,
           parsed.data.approvalToken,
           user.userId,

@@ -1,3 +1,6 @@
+import { claudeConfig } from "./claude-config";
+import { ClaudeReviewer } from "./claude-provider";
+import type { ActiveReviewer } from "./model";
 import { RoundtableReports, RoundtableReportService } from "./reports";
 import { envValue, notionConfig, operationalDB } from "../ideas/runtime";
 import { NotionRepository } from "../ideas/notion";
@@ -18,16 +21,24 @@ export function gptConfig() {
     503,
   );
 }
+const gptReportRetention =
+  "Completed assessments are automatically saved to Notion. The operation ledger retains hashes and request status; Notion retains the full report and selected brief.";
 export function gptProfile(config = gptConfig()) {
   return {
     ...aiProfile(config, promptVersion),
-    localRetention:
-      "Completed assessments are automatically saved to Notion. The operation ledger retains hashes and request status; Notion retains the full report and selected brief.",
+    localRetention: gptReportRetention,
   };
 }
-export function roundtableService() {
-  const config = gptConfig();
+export function claudeProfile() {
+  return {
+    ...aiProfile(claudeConfig(), promptVersion),
+    localRetention: gptReportRetention,
+  };
+}
+export function roundtableService(reviewer: ActiveReviewer = "gpt") {
+  const config = reviewer === "claude" ? claudeConfig() : gptConfig();
   const secrets = [
+    "IDEA_LAB_CLAUDE_API_KEY",
     "NOTION_TOKEN",
     "IDEA_LAB_AI_API_KEY",
     "IDEA_LAB_EMBEDDING_API_KEY",
@@ -38,7 +49,9 @@ export function roundtableService() {
     config,
     new NotionRepository(notionConfig()),
     new Operations(operationalDB()),
-    new GPTReviewer(config, fetch, secrets),
+    config.provider === "anthropic-messages"
+      ? new ClaudeReviewer(config, fetch, secrets)
+      : new GPTReviewer(config, fetch, secrets),
     roundtableReportService(),
     secrets,
   );

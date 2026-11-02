@@ -119,7 +119,7 @@ export class RoundtableReports extends NotionRepository {
     if (matches.length > 1)
       throw new AppError(
         "RECONCILIATION_REQUIRED",
-        "More than one report references this GPT run. Inspect the records in Notion.",
+        "More than one report references this model run. Inspect the records in Notion.",
         409,
       );
     const found = matches[0] ?? null;
@@ -129,7 +129,7 @@ export class RoundtableReports extends NotionRepository {
     )
       throw new AppError(
         "ROUNDTABLE_REPORT_INVALID",
-        "The saved report differs from this GPT result.",
+        "The saved report differs from this model result.",
         409,
       );
     return found;
@@ -161,7 +161,10 @@ export class RoundtableReports extends NotionRepository {
           {
             type: "text",
             text: {
-              content: "GPT roundtable assessment · op:" + snapshot.operation,
+              content:
+                (snapshot.result.participant === "claude" ? "Claude" : "GPT") +
+                " roundtable assessment · op:" +
+                snapshot.operation,
             },
           },
         ],
@@ -196,8 +199,8 @@ export class RoundtableReports extends NotionRepository {
           type: "paragraph",
           paragraph: richText(
             snapshot.storageMode === "automatic"
-              ? "Automatically saved GPT report. Model findings remain unapproved; the idea’s active score is unchanged."
-              : "Saved GPT roundtable assessment. Viability scores and evidence are preserved in the snapshot; the idea’s active score is unchanged.",
+              ? "Automatically saved roundtable report. Model findings remain unapproved; the idea’s active score is unchanged."
+              : "Saved roundtable assessment. Viability scores and evidence are preserved in the snapshot; the idea’s active score is unchanged.",
           ),
         },
         {
@@ -241,7 +244,7 @@ export class RoundtableReportService {
   private async proof(result: RoundtableResult, actor: string) {
     const op = await this.operations.readById(result.runId, actor);
     if (
-      op.action !== "roundtable-gpt" ||
+      op.action !== "roundtable-" + result.participant ||
       op.status !== "done" ||
       op.target !== result.input.ideaId ||
       op.result_id !== (await digest(JSON.stringify(result))) ||
@@ -249,7 +252,7 @@ export class RoundtableReportService {
     )
       throw new AppError(
         "AI_PROVENANCE_INVALID",
-        "This report does not match a completed GPT request for the current owner.",
+        "This report does not match a completed model request for the current owner.",
         409,
       );
   }
@@ -300,7 +303,7 @@ export class RoundtableReportService {
     if (matches.length > 1)
       throw new AppError(
         "RECONCILIATION_REQUIRED",
-        "Multiple reports reference this GPT run.",
+        "Multiple reports reference this model run.",
         409,
       );
     return matches[0] ?? null;
@@ -335,7 +338,7 @@ export class RoundtableReportService {
         message:
           error instanceof AppError
             ? error.message
-            : "The report could not be saved. GPT will not be run again.",
+            : "The report could not be saved. The model will not be run again.",
       };
     }
   }
