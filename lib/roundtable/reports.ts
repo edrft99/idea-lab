@@ -1,3 +1,4 @@
+import { reviewerName } from "./model";
 import { z } from "zod";
 import { NotionRepository, richText } from "../ideas/notion";
 import { Operations, digest, type Operation } from "../ideas/operations";
@@ -162,7 +163,7 @@ export class RoundtableReports extends NotionRepository {
             type: "text",
             text: {
               content:
-                (snapshot.result.participant === "claude" ? "Claude" : "GPT") +
+                reviewerName(snapshot.result.participant) +
                 " roundtable assessment · op:" +
                 snapshot.operation,
             },

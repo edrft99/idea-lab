@@ -2,6 +2,7 @@
 import { useState } from "react";
 import { Download, ChevronDown } from "lucide-react";
 import {
+  reviewerName,
   dimensions,
   labels,
   provisionalScore,
@@ -17,7 +18,7 @@ export function ReviewerAssessment({
   onDownload: () => void;
 }) {
   const [section, setSection] = useState("overview");
-  const name = result.participant === "claude" ? "Claude" : "GPT";
+  const name = reviewerName(result.participant);
   const assessment = result.assessment,
     score = provisionalScore(assessment);
   const sections = [

@@ -1,3 +1,4 @@
+import { checkedGrokConfig, type GrokConfig } from "./grok-config";
 import { checkedClaudeConfig, type ClaudeConfig } from "./claude-config";
 import { reviewerName } from "./model";
 import type { AutoSaveResult, RoundtableReportService } from "./reports";
@@ -23,9 +24,9 @@ import {
   type RoundtableRequest,
 } from "./model";
 export class RoundtableService {
-  private config: AIConfig | OpenAIConfig | ClaudeConfig;
+  private config: AIConfig | OpenAIConfig | ClaudeConfig | GrokConfig;
   constructor(
-    config: AIConfig | OpenAIConfig | ClaudeConfig,
+    config: AIConfig | OpenAIConfig | ClaudeConfig | GrokConfig,
     private repository: NotionRepository,
     private operations: Operations,
     private provider: Pick<GPTReviewer, "evaluate">,
@@ -36,16 +37,20 @@ export class RoundtableService {
     private secrets: string[] = [],
   ) {
     this.config =
-      config.provider === "anthropic-messages"
-        ? checkedClaudeConfig(config)
-        : config.provider === "openai-responses"
-          ? checkedOpenAIConfig(config)
-          : checkedAIConfig(config);
+      config.provider === "xai-chat-completions"
+        ? checkedGrokConfig(config)
+        : config.provider === "anthropic-messages"
+          ? checkedClaudeConfig(config)
+          : config.provider === "openai-responses"
+            ? checkedOpenAIConfig(config)
+            : checkedAIConfig(config);
   }
   private get participant() {
-    return this.config.provider === "anthropic-messages"
-      ? ("claude" as const)
-      : ("gpt" as const);
+    return this.config.provider === "xai-chat-completions"
+      ? ("grok" as const)
+      : this.config.provider === "anthropic-messages"
+        ? ("claude" as const)
+        : ("gpt" as const);
   }
   private get name() {
     return reviewerName(this.participant);
@@ -213,9 +218,7 @@ export class RoundtableService {
       } catch {}
       if (dispatched)
         throw new AppError(
-          this.participant === "claude"
-            ? "CLAUDE_REQUEST_UNCONFIRMED"
-            : "GPT_REQUEST_UNCONFIRMED",
+          this.participant.toUpperCase() + "_REQUEST_UNCONFIRMED",
           `No usable ${this.name} result was retained. The request may have been processed or charged. It will not be replayed. Check request status before deciding whether to review a new request.`,
           503,
           undefined,
@@ -235,7 +238,11 @@ export async function roundtableRequestStatus(
   const op = byId
     ? await operations.readById(token, actor)
     : await operations.read(token, actor);
-  if (!["roundtable-gpt", "roundtable-claude"].includes(op.action))
+  if (
+    !["roundtable-gpt", "roundtable-claude", "roundtable-grok"].includes(
+      op.action,
+    )
+  )
     throw new AppError(
       "INVALID_OPERATION",
       "This is not a roundtable model request.",

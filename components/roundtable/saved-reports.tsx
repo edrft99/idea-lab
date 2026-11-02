@@ -13,6 +13,8 @@ import {
 } from "@/components/ideas/use-resource";
 import type { Idea } from "@/lib/ideas/domain";
 import {
+  reviewerName,
+  type ActiveReviewer,
   resultSchema,
   provisionalScore,
   type RoundtableResult,
@@ -29,7 +31,7 @@ export function SavedReports({
   onBusyChange,
 }: {
   idea: Idea;
-  participant: "gpt" | "claude";
+  participant: ActiveReviewer;
   result: RoundtableResult | null;
   busy: boolean;
   storage: AutoSaveResult | null;
@@ -43,7 +45,7 @@ export function SavedReports({
   const reports = history.data?.filter(
     (row) => row.snapshot.result.participant === participant,
   );
-  const name = participant === "claude" ? "Claude" : "GPT";
+  const name = reviewerName(participant);
   const [local, setLocal] = useState<{
       runId: string;
       state: AutoSaveResult;
@@ -234,8 +236,8 @@ export function SavedReports({
       {!result && reports?.length === 0 && (
         <p className="rt-agent-score-note">
           No saved {name} assessment for this idea yet.{" "}
-          {participant === "claude"
-            ? "Reuse GPT’s brief below to request Claude’s independent review."
+          {participant !== "gpt"
+            ? `Reuse the assessed brief below to request ${name}’s independent review.`
             : "Prepare a brief below to start a review."}
         </p>
       )}

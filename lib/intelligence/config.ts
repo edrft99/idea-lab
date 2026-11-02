@@ -73,7 +73,8 @@ export function aiProfile(
   c:
     | AIConfig
     | import("./openai-config").OpenAIConfig
-    | import("../roundtable/claude-config").ClaudeConfig,
+    | import("../roundtable/claude-config").ClaudeConfig
+    | import("../roundtable/grok-config").GrokConfig,
   taskPromptVersion: string = promptVersion,
 ) {
   return {
@@ -86,9 +87,11 @@ export function aiProfile(
     requestsPerHour: c.requestsPerHour,
     retentionNotice: c.retentionNotice,
     requestStorage:
-      c.provider === "anthropic-messages"
-        ? "Anthropic Messages API; no prompt caching requested. Retention follows your Anthropic account policy; no zero-retention guarantee is made."
-        : "store=false requested; provider retention and abuse monitoring still follow the configured service policy.",
+      c.provider === "xai-chat-completions"
+        ? "xAI Chat Completions API. No tools, search or prompt caching requested. Retention follows the configured xAI account policy."
+        : c.provider === "anthropic-messages"
+          ? "Anthropic Messages API; no prompt caching requested. Retention follows your Anthropic account policy; no zero-retention guarantee is made."
+          : "store=false requested; provider retention and abuse monitoring still follow the configured service policy.",
     localRetention:
       "The generated result stays in this browser until downloaded or explicitly saved for Notion review. The operation ledger stores hashes only.",
   };

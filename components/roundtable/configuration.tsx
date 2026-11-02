@@ -68,18 +68,23 @@ export function RoundtableConfiguration() {
       <Link className="text-link" href="/roundtable">
         Open the roundtable →
       </Link>
-      <ClaudeConfiguration />
-      <p>
-        Grok and GitHub Copilot are next. Peer discussion remains a future
-        stage.
-      </p>
+      <AdditionalConfiguration reviewer="claude" />
+      <AdditionalConfiguration reviewer="grok" />
+      <p>GitHub Copilot is next. Peer discussion remains a future stage.</p>
     </section>
   );
 }
 
-function ClaudeConfiguration() {
+function AdditionalConfiguration({
+  reviewer,
+}: {
+  reviewer: "claude" | "grok";
+}) {
+  const name = reviewer === "grok" ? "Grok" : "Claude";
+  const vendor = reviewer === "grok" ? "xAI" : "Anthropic";
+  const prefix = "IDEA_LAB_" + reviewer.toUpperCase();
   const r = useResource<{
-    claude: {
+    [key: string]: {
       enabled: boolean;
       message?: string;
       profile?: { deployment: string; retentionNotice: string };
@@ -87,45 +92,45 @@ function ClaudeConfiguration() {
   }>("/api/roundtable/status");
   return (
     <div className="mt-panel">
-      <h2>Roundtable · Claude connection</h2>
+      <h2>Roundtable · {name} connection</h2>
       {r.error ? (
         <Failure error={r.error} retry={r.refresh} />
       ) : !r.data ? (
         <Loading />
-      ) : r.data.claude.enabled ? (
+      ) : r.data[reviewer].enabled ? (
         <>
-          <p>Configured model: {r.data.claude.profile?.deployment}</p>
-          <p>{r.data.claude.profile?.retentionNotice}</p>
+          <p>Configured model: {r.data[reviewer].profile?.deployment}</p>
+          <p>{r.data[reviewer].profile?.retentionNotice}</p>
         </>
       ) : (
         <>
-          <p>{r.data.claude.message}</p>
+          <p>{r.data[reviewer].message}</p>
           <details>
-            <summary>Claude connection setup</summary>
+            <summary>{name} connection setup</summary>
             <p>Add these protected Site runtime settings:</p>
             <ul>
               <li>
-                <code>IDEA_LAB_CLAUDE_MODEL</code>: an Anthropic model
-                supporting JSON schema structured outputs
+                <code>{prefix}_MODEL</code>: a {vendor} model supporting JSON
+                schema structured outputs
               </li>
               <li>
-                <code>IDEA_LAB_CLAUDE_API_KEY</code>: your Anthropic API
-                credential
+                <code>{prefix}_API_KEY</code>: your {vendor} API credential
               </li>
               <li>
-                <code>IDEA_LAB_CLAUDE_RETENTION_NOTICE</code>: the retention
-                terms for your Anthropic API account
+                <code>{prefix}_RETENTION_NOTICE</code>: the retention terms for
+                your {vendor} API account
               </li>
             </ul>
             <p>
-              The Claude app relay and Claude subscription do not provide this
-              API credential. Keep keys in protected settings.
+              Use a {vendor} API credential. Consumer subscriptions and the
+              Claude relay do not provide this key. Keep keys in protected
+              settings.
             </p>
           </details>
         </>
       )}
       <p>
-        Select Claude to reuse GPT’s assessed brief and the same scoring rubric.
+        Select {name} to reuse the assessed brief and the same scoring rubric.
         Each reviewer has separate scores and automatically saved history.
       </p>
     </div>

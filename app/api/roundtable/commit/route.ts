@@ -8,8 +8,12 @@ export async function POST(request: Request) {
   try {
     const user = await authorizeOwner();
     const reviewer = new URL(request.url).searchParams.get("reviewer") ?? "gpt";
-    if (reviewer !== "gpt" && reviewer !== "claude")
-      throw new AppError("INVALID_REVIEWER", "Choose GPT or Claude.", 400);
+    if (reviewer !== "gpt" && reviewer !== "claude" && reviewer !== "grok")
+      throw new AppError(
+        "INVALID_REVIEWER",
+        "Choose GPT, Claude or Grok.",
+        400,
+      );
     checkOrigin(request);
     const parsed = z
       .object({

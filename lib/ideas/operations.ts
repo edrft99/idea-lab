@@ -84,7 +84,7 @@ export class Operations {
   async countAIAttempts(actor: string, since: number) {
     const row = await this.db
       .prepare(
-        "SELECT COUNT(*) AS count FROM idea_lab_operations WHERE actor_hash=? AND action IN ('ai-evaluate','ai-extract','roundtable-gpt','roundtable-claude','semantic-index','semantic-query','semantic-snapshot-batch') AND created_at>=? AND status<>'pending'",
+        "SELECT COUNT(*) AS count FROM idea_lab_operations WHERE actor_hash=? AND action IN ('ai-evaluate','ai-extract','roundtable-gpt','roundtable-claude','roundtable-grok','semantic-index','semantic-query','semantic-snapshot-batch') AND created_at>=? AND status<>'pending'",
       )
       .bind(await digest(actor), since)
       .first<{ count: number }>();
@@ -357,7 +357,7 @@ export class Operations {
   ) {
     await this.db
       .prepare(
-        "UPDATE idea_lab_operations SET status=?,result_id=? WHERE id=? AND action IN ('roundtable-gpt','roundtable-claude') AND status<>'done'",
+        "UPDATE idea_lab_operations SET status=?,result_id=? WHERE id=? AND action IN ('roundtable-gpt','roundtable-claude','roundtable-grok') AND status<>'done'",
       )
       .bind(status, resultId, id)
       .run();

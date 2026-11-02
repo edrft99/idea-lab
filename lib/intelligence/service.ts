@@ -22,6 +22,7 @@ export function aiRequestStatus(op: Operation) {
       "ai-extract",
       "roundtable-gpt",
       "roundtable-claude",
+      "roundtable-grok",
     ].includes(op.action)
   )
     throw new AppError("INVALID_OPERATION", "This is not an AI request.", 400);

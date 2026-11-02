@@ -64,7 +64,7 @@ export const resultSchema = z
     format: z.literal("idea-lab-roundtable"),
     version: z.literal(1),
     runId: z.string().regex(/^[a-f0-9]{64}$/),
-    participant: z.enum(["gpt", "claude"]),
+    participant: z.enum(["gpt", "claude", "grok"]),
     stage: z.literal("independent"),
     input: requestSchema,
     inputHash: z.string().regex(/^[a-f0-9]{64}$/),
@@ -73,6 +73,7 @@ export const resultSchema = z
       "openai-responses",
       "azure-openai-responses",
       "anthropic-messages",
+      "xai-chat-completions",
     ]),
     model: z.string().min(1).max(200),
     resolvedModel: z.string().min(1).max(200),
@@ -94,7 +95,9 @@ export const resultSchema = z
   .refine(
     (value) =>
       (value.participant === "claude") ===
-      (value.provider === "anthropic-messages"),
+        (value.provider === "anthropic-messages") &&
+      (value.participant === "grok") ===
+        (value.provider === "xai-chat-completions"),
     { message: "Reviewer and provider do not match" },
   );
 export type RoundtableResult = z.infer<typeof resultSchema>;
@@ -104,6 +107,7 @@ export function decodeResult(raw: string) {
   return resultSchema.parse(JSON.parse(raw));
 }
 
-export type ActiveReviewer = "gpt" | "claude";
+export const activeReviewers = ["gpt", "claude", "grok"] as const;
+export type ActiveReviewer = (typeof activeReviewers)[number];
 export const reviewerName = (id: ActiveReviewer) =>
-  id === "claude" ? "Claude" : "GPT";
+  ({ gpt: "GPT", claude: "Claude", grok: "Grok" })[id];
