@@ -1,3 +1,4 @@
+import { RoundtableReports, RoundtableReportService } from "./reports";
 import { envValue, notionConfig, operationalDB } from "../ideas/runtime";
 import { NotionRepository } from "../ideas/notion";
 import { Operations } from "../ideas/operations";
@@ -21,7 +22,7 @@ export function gptProfile(config = gptConfig()) {
   return {
     ...aiProfile(config, promptVersion),
     localRetention:
-      "The assessment stays in this browser until downloaded. The operation ledger retains hashes and request status, not idea excerpts or generated text.",
+      "Completed assessments are automatically saved to Notion. The operation ledger retains hashes and request status; Notion retains the full report and selected brief.",
   };
 }
 export function roundtableService() {
@@ -38,6 +39,17 @@ export function roundtableService() {
     new NotionRepository(notionConfig()),
     new Operations(operationalDB()),
     new GPTReviewer(config, fetch, secrets),
+    roundtableReportService(),
     secrets,
+  );
+}
+
+export function roundtableReports() {
+  return new RoundtableReports(notionConfig());
+}
+export function roundtableReportService() {
+  return new RoundtableReportService(
+    roundtableReports(),
+    new Operations(operationalDB()),
   );
 }

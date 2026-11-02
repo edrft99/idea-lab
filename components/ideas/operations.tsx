@@ -151,41 +151,43 @@ export function RecentSaves() {
           <div className="operation-row" key={op.id}>
             <div>
               <strong>
-                {op.action === "attach-file"
-                  ? "File attachment"
-                  : op.action.startsWith("import-")
-                    ? op.action === "import-create"
-                      ? "Import capture"
-                      : "Import recovery"
-                    : op.action.startsWith("semantic-")
-                      ? (semanticLabels[op.action] ?? "Semantic operation")
-                      : [
-                            "ai-evaluate",
-                            "ai-extract",
-                            "roundtable-gpt",
-                          ].includes(op.action)
-                        ? op.action === "roundtable-gpt"
-                          ? "GPT roundtable assessment"
-                          : op.action === "ai-extract"
-                            ? "AI extraction request"
-                            : "AI assessment request"
-                        : isProposal(op.action)
-                          ? op.action.endsWith("-store")
-                            ? "Proposal storage"
-                            : "Proposal decision"
-                          : op.action === "merge-ideas"
-                            ? "Idea merge"
-                            : op.action === "related-link"
-                              ? "Related link"
-                              : op.action === "review-decision"
-                                ? "Review decision"
-                                : op.action.startsWith("evaluation-")
-                                  ? "Evaluation"
-                                  : op.action === "delete-idea"
-                                    ? "Idea deletion"
-                                    : op.action === "create"
-                                      ? "Capture"
-                                      : "Update"}{" "}
+                {["roundtable-save", "roundtable-autosave"].includes(op.action)
+                  ? "Roundtable assessment save"
+                  : op.action === "attach-file"
+                    ? "File attachment"
+                    : op.action.startsWith("import-")
+                      ? op.action === "import-create"
+                        ? "Import capture"
+                        : "Import recovery"
+                      : op.action.startsWith("semantic-")
+                        ? (semanticLabels[op.action] ?? "Semantic operation")
+                        : [
+                              "ai-evaluate",
+                              "ai-extract",
+                              "roundtable-gpt",
+                            ].includes(op.action)
+                          ? op.action === "roundtable-gpt"
+                            ? "GPT roundtable assessment"
+                            : op.action === "ai-extract"
+                              ? "AI extraction request"
+                              : "AI assessment request"
+                          : isProposal(op.action)
+                            ? op.action.endsWith("-store")
+                              ? "Proposal storage"
+                              : "Proposal decision"
+                            : op.action === "merge-ideas"
+                              ? "Idea merge"
+                              : op.action === "related-link"
+                                ? "Related link"
+                                : op.action === "review-decision"
+                                  ? "Review decision"
+                                  : op.action.startsWith("evaluation-")
+                                    ? "Evaluation"
+                                    : op.action === "delete-idea"
+                                      ? "Idea deletion"
+                                      : op.action === "create"
+                                        ? "Capture"
+                                        : "Update"}{" "}
                 · {op.status}
               </strong>
               <small>{new Date(op.created_at).toLocaleString()}</small>
@@ -252,17 +254,25 @@ export function RecentSaves() {
                       ? reviewPath(op.action) + op.result_id
                       : op.action === "review-decision"
                         ? "/review/" + op.result_id
-                        : "/ideas/" +
-                          (op.action.startsWith("evaluation-")
-                            ? op.target
-                            : op.result_id)
+                        : ["roundtable-save", "roundtable-autosave"].includes(
+                              op.action,
+                            )
+                          ? "/ideas/" + op.target + "/roundtable"
+                          : "/ideas/" +
+                            (op.action.startsWith("evaluation-")
+                              ? op.target
+                              : op.result_id)
                   }
                 >
                   {isReviewResult(op.action)
                     ? "Open saved proposal"
                     : op.action === "review-decision"
                       ? "Open saved decision"
-                      : "Open saved idea"}
+                      : ["roundtable-save", "roundtable-autosave"].includes(
+                            op.action,
+                          )
+                        ? "Open saved assessment"
+                        : "Open saved idea"}
                 </Link>
               )}
           </div>

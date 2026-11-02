@@ -1,6 +1,6 @@
 # Evaluation roundtable: proposed implementation
 
-Status: target design and future delivery plan. The owner selected GitHub Copilot for the fourth seat and requested the UI followed by GPT first. The first implementation is documented in roundtable-gpt.md: the UI and GPT independent assessment are implemented; multi-provider cross-review and Notion report storage remain future phases.
+Status: target design and future delivery plan. The owner selected GitHub Copilot for the fourth seat and requested the UI followed by GPT first. The first implementation is documented in roundtable-gpt.md: the UI, GPT independent assessment and automatic Notion report storage are implemented; multi-provider cross-review remains a future phase.
 
 ## Experience
 
@@ -49,7 +49,7 @@ For an initial Sites-compatible implementation, dispatch bounded provider steps 
 
 A lost provider response can still incur charges. Never automatically replay an ambiguous generation step. Keep it unresolved and let the owner explicitly authorise a replacement attempt within an updated budget. Keep completed participants and their provenance; never relabel regenerated text as the missing original response. Cancellation prevents future dispatch and preserves completed work.
 
-Saving the full report to Notion and selecting an active viability ranking are separate reviewed actions. Save an immutable versioned roundtable snapshot with all participants, per-round assessments, rubric, scores, evidence gaps, provenance and human decision. Do not change an idea's description, scores or status merely because a model recommends it. Accepting idea expansions should be an explicit edit or separate capture.
+Completed GPT reports save automatically as part of the initial authorised request. Selecting an active viability ranking remains a separate reviewed action. Save an immutable versioned roundtable snapshot with all participants, per-round assessments, rubric, scores, evidence gaps, provenance and human decision. Do not change an idea's description, scores or status merely because a model recommends it. Accepting idea expansions should be an explicit edit or separate capture.
 
 ## Provider integration findings
 
@@ -78,7 +78,7 @@ Primary references:
 1. Use GitHub Copilot as the fourth participant; resolve APIs versus supported subscription access for the panel. Confirm success criteria can be defined per idea and finalise the initial rubric.
 2. Implement the roundtable schemas, scoring, step coordination and synthetic provider fixtures. Test independence and cross-review barriers, ownership, stale/configuration changes, replay protection, failed seats, budgets, cancellation and reload recovery.
 3. Add documented provider adapters and connection-status checks, then the roundtable graphic, accessible reports and explicit transmission flow.
-4. Add immutable Notion report storage and an explicit active-ranking selection, preserving the legacy rubric and manual-score protections.
+4. Preserve automatic immutable Notion report storage and add an explicit active-ranking selection, preserving the legacy rubric and manual-score protections.
 5. Run required repository tests, TypeScript and the production build. Verify desktop/mobile interaction using synthetic records. Review and merge through a PR before publishing to the existing private Site.
 6. Live paid model calls require configured provider access and the app's exact transmission approval. Verify each provider against a synthetic idea before using real idea content. Do not describe adapters tested only against fixtures as live-connected.
 

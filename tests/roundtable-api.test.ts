@@ -1,3 +1,8 @@
+import { POST as autoSave } from "../app/api/roundtable/reports/auto-save/route";
+import { POST as savePrepare } from "../app/api/roundtable/reports/prepare/route";
+import { POST as saveCommit } from "../app/api/roundtable/reports/commit/route";
+import { POST as saveStatus } from "../app/api/roundtable/reports/status/route";
+import { GET as savedReports } from "../app/api/roundtable/reports/route";
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 vi.mock("@/app/chatgpt-auth", () => ({ getChatGPTUser: vi.fn() }));
 import { getChatGPTUser } from "../app/chatgpt-auth";
@@ -27,7 +32,15 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 describe("roundtable API boundary", () => {
-  it.each([prepare, commit, status])(
+  it.each([
+    prepare,
+    commit,
+    status,
+    savePrepare,
+    saveCommit,
+    saveStatus,
+    autoSave,
+  ])(
     "requires the owner, same origin and a strict payload before accessing GPT",
     async (handler) => {
       const fetcher = vi.spyOn(globalThis, "fetch");
@@ -82,6 +95,34 @@ describe("roundtable API boundary", () => {
     expect(body.data.gpt.enabled).toBe(true);
     expect(body.data.gpt.profile.deployment).toBe(gptConfig.deployment);
     expect(JSON.stringify(body)).not.toContain(gptConfig.key);
+    expect(fetcher).not.toHaveBeenCalled();
+  });
+});
+
+describe("saved report reads", () => {
+  it("requires owner identity before reading Notion history", async () => {
+    vi.mocked(getChatGPTUser).mockResolvedValue(null);
+    const fetcher = vi.spyOn(globalThis, "fetch");
+    const response = await runWithIdeaRuntime(env, () =>
+      savedReports(
+        new Request(
+          "https://idea.test/api/roundtable/reports?ideaId=50000000-0000-4000-8000-000000000005",
+        ),
+      ),
+    );
+    expect(response.status).toBe(401);
+    expect(fetcher).not.toHaveBeenCalled();
+  });
+  it("rejects a malformed idea reference before provider or Notion access", async () => {
+    const fetcher = vi.spyOn(globalThis, "fetch");
+    const response = await runWithIdeaRuntime(env, () =>
+      savedReports(
+        new Request(
+          "https://idea.test/api/roundtable/reports?ideaId=not-an-id",
+        ),
+      ),
+    );
+    expect(response.status).toBe(400);
     expect(fetcher).not.toHaveBeenCalled();
   });
 });

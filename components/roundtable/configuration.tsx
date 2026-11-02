@@ -26,8 +26,9 @@ export function RoundtableConfiguration() {
           <p>Configured model: {r.data.gpt.profile?.deployment}</p>
           <p>{r.data.gpt.profile?.retentionNotice}</p>
           <p>
-            Each request requires review of the selected idea brief. Generation
-            does not change saved ideas or scores.
+            Each request requires review of the selected idea brief. Completed
+            reports save automatically to Notion; the idea’s active score stays
+            unchanged.
           </p>
         </>
       ) : (
