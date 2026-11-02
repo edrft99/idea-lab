@@ -1,4 +1,6 @@
 "use client";
+import { useState } from "react";
+import { DeleteIdea } from "./delete-idea";
 import Link from "@/components/navigation-link";
 import {
   Lightbulb,
@@ -26,7 +28,16 @@ export function Dashboard() {
     reviews: Review[];
     reviewUnavailable: boolean;
   }>("/api/dashboard");
-  const ideas = data?.ideas ?? [],
+  const [deleted, setDeleted] = useState<string[]>([]);
+  const [notice, setNotice] = useState("");
+  function onDeleted(id: string) {
+    setDeleted((ids) => [...ids, id]);
+    setNotice("Idea deleted. You can restore it from Notion’s trash.");
+    refresh();
+  }
+  const ideas = (data?.ideas ?? []).filter(
+      (idea) => !deleted.includes(idea.id),
+    ),
     reviews = data?.reviews ?? [];
   const recent = [...ideas]
     .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
@@ -63,6 +74,11 @@ export function Dashboard() {
           </Link>
         </div>
       </div>
+      {notice && (
+        <p role="status" className="subtle-note">
+          {notice}
+        </p>
+      )}
       {error ? (
         <Failure error={error} retry={refresh} stale={stale} />
       ) : !data ? (
@@ -149,7 +165,10 @@ export function Dashboard() {
                 </div>
                 <div className="focus-grid">
                   {focus.map((i) => (
-                    <IdeaCard key={i.id} idea={i} />
+                    <div key={i.id}>
+                      <IdeaCard idea={i} />
+                      <DeleteIdea idea={i} onDeleted={onDeleted} />
+                    </div>
                   ))}
                 </div>
                 {!focus.length && (
@@ -175,20 +194,19 @@ export function Dashboard() {
                     </Link>
                   </div>
                   {recent.map((i) => (
-                    <Link
-                      className="recent-row"
-                      key={i.id}
-                      href={"/ideas/" + i.id}
-                    >
-                      <div>
-                        <strong>{i.title || "Untitled record"}</strong>
-                        <small>{i.category}</small>
-                      </div>
-                      <span className="status-text">{i.status}</span>
-                      <span className="table-score">
-                        {i.priorityScore ?? "—"}
-                      </span>
-                    </Link>
+                    <div key={i.id}>
+                      <Link className="recent-row" href={"/ideas/" + i.id}>
+                        <div>
+                          <strong>{i.title || "Untitled record"}</strong>
+                          <small>{i.category}</small>
+                        </div>
+                        <span className="status-text">{i.status}</span>
+                        <span className="table-score">
+                          {i.priorityScore ?? "—"}
+                        </span>
+                      </Link>
+                      <DeleteIdea idea={i} onDeleted={onDeleted} />
+                    </div>
                   ))}
                 </section>
                 <section className="panel mix-panel">

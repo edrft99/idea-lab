@@ -11,6 +11,7 @@ import { operationalDB } from "@/lib/ideas/runtime";
 import { evaluationService } from "@/lib/evaluations/access";
 import { z } from "zod";
 import {
+  deletionService,
   authorizeOwner,
   checkOrigin,
   jsonBody,
@@ -48,47 +49,54 @@ export async function POST(request: Request) {
       );
     return Response.json(
       {
-        data: operation.action.startsWith("semantic-")
-          ? await semanticCoordinator().reconcile(
-              parsed.data.operationId,
-              user.userId,
-            )
-          : ["ai-evaluate", "ai-extract"].includes(operation.action)
-            ? aiRequestStatus(operation)
-            : operation.action.startsWith("assessment-")
-              ? await assessmentService().reconcile(
+        data:
+          operation.action === "delete-idea"
+            ? await deletionService().status(
+                parsed.data.operationId,
+                user.userId,
+                true,
+              )
+            : operation.action.startsWith("semantic-")
+              ? await semanticCoordinator().reconcile(
                   parsed.data.operationId,
                   user.userId,
                 )
-              : operation.action.startsWith("proposal-")
-                ? await proposalService().reconcile(
-                    parsed.data.operationId,
-                    user.userId,
-                  )
-                : operation.action === "merge-ideas"
-                  ? await mergeService().reconcile(
+              : ["ai-evaluate", "ai-extract"].includes(operation.action)
+                ? aiRequestStatus(operation)
+                : operation.action.startsWith("assessment-")
+                  ? await assessmentService().reconcile(
                       parsed.data.operationId,
                       user.userId,
                     )
-                  : operation.action === "related-link"
-                    ? await linkService().reconcile(
+                  : operation.action.startsWith("proposal-")
+                    ? await proposalService().reconcile(
                         parsed.data.operationId,
                         user.userId,
                       )
-                    : operation.action.startsWith("evaluation-")
-                      ? await evaluationService().reconcile(
+                    : operation.action === "merge-ideas"
+                      ? await mergeService().reconcile(
                           parsed.data.operationId,
                           user.userId,
                         )
-                      : operation.action === "review-decision"
-                        ? await reviewService().reconcile(
+                      : operation.action === "related-link"
+                        ? await linkService().reconcile(
                             parsed.data.operationId,
                             user.userId,
                           )
-                        : await writeService().reconcileId(
-                            parsed.data.operationId,
-                            user.userId,
-                          ),
+                        : operation.action.startsWith("evaluation-")
+                          ? await evaluationService().reconcile(
+                              parsed.data.operationId,
+                              user.userId,
+                            )
+                          : operation.action === "review-decision"
+                            ? await reviewService().reconcile(
+                                parsed.data.operationId,
+                                user.userId,
+                              )
+                            : await writeService().reconcileId(
+                                parsed.data.operationId,
+                                user.userId,
+                              ),
       },
       { headers: { "Cache-Control": "private, no-store" } },
     );

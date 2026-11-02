@@ -1,3 +1,4 @@
+import { IdeaDeletion } from "./deletion";
 import { getChatGPTUser } from "@/app/chatgpt-auth";
 import { AppError } from "./errors";
 import { envValue, notionConfig, operationalDB } from "./runtime";
@@ -99,4 +100,8 @@ export async function jsonBody(
   } catch {
     throw new AppError("INVALID_BODY", "The JSON body is invalid.", 400);
   }
+}
+
+export function deletionService() {
+  return new IdeaDeletion(repository(), new Operations(operationalDB()));
 }

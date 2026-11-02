@@ -175,9 +175,11 @@ export function RecentSaves() {
                                 ? "Review decision"
                                 : op.action.startsWith("evaluation-")
                                   ? "Evaluation"
-                                  : op.action === "create"
-                                    ? "Capture"
-                                    : "Update"}{" "}
+                                  : op.action === "delete-idea"
+                                    ? "Idea deletion"
+                                    : op.action === "create"
+                                      ? "Capture"
+                                      : "Update"}{" "}
                 · {op.status}
               </strong>
               <small>{new Date(op.created_at).toLocaleString()}</small>
@@ -232,6 +234,7 @@ export function RecentSaves() {
             )}
             {op.result_id &&
               op.action !== "attach-file" &&
+              op.action !== "delete-idea" &&
               !op.action.startsWith("semantic-") &&
               !["ai-evaluate", "ai-extract"].includes(op.action) && (
                 <Link

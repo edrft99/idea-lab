@@ -510,6 +510,30 @@ export class NotionRepository {
       );
     return this.relationPages(page);
   }
+  async hasMergedHistory(id: string) {
+    return (
+      (
+        await this.query(this.config.ideas, {
+          property: "Canonical Idea",
+          relation: { contains: id },
+        })
+      ).length > 0
+    );
+  }
+  async trashIdea(id: string) {
+    const page = this.checked(
+      await this.call("pages/" + id, "PATCH", { in_trash: true }),
+      this.config.ideas,
+    );
+    if (page.id !== id || !page.in_trash)
+      throw new AppError(
+        "WRITE_UNCERTAIN",
+        "Notion did not confirm deletion. Check status.",
+        503,
+        undefined,
+        true,
+      );
+  }
   async list(filter: IdeaFilter): Promise<Idea[]> {
     await this.schema(this.config.ideas, ideaTypes);
     await this.schema(this.config.sources, {
