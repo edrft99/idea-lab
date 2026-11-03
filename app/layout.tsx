@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import "./globals.css";
+import "./pixel.css";
 export const metadata: Metadata = {
   title: { default: "Idea Lab", template: "%s · Idea Lab" },
   description:

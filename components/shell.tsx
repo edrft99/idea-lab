@@ -1,10 +1,9 @@
 "use client";
+import { PixelFlask } from "@/components/pixel-flask";
 import Link from "@/components/navigation-link";
 import { usePathname } from "next/navigation";
 import { useEffect, useState, type ReactNode } from "react";
 import {
-  FlaskConical,
-  UsersRound,
   LayoutDashboard,
   Compass,
   Inbox,
@@ -13,10 +12,8 @@ import {
   Settings2,
   Moon,
   Sun,
-  ArrowUpRight,
   Menu,
   X,
-  CircleHelp,
 } from "lucide-react";
 export function Shell({ children }: { children: ReactNode }) {
   const path = usePathname();
@@ -70,12 +67,11 @@ export function Shell({ children }: { children: ReactNode }) {
     document.documentElement.dataset.theme = !dark ? "dark" : "light";
     localStorage.setItem("idea-lab-theme", !dark ? "dark" : "light");
   }
-  const navPath = path.endsWith("/roundtable") ? "/roundtable" : path;
+  const navPath = path;
   const links = [
     { href: "/", name: "Overview", icon: LayoutDashboard },
     { href: "/ideas", name: "Idea explorer", icon: Compass },
     { href: "/review", name: "Review center", icon: Inbox },
-    { href: "/roundtable", name: "Roundtable", icon: UsersRound },
     { href: "/sources", name: "Sources & imports", icon: Layers3 },
   ];
   return (
@@ -98,7 +94,7 @@ export function Shell({ children }: { children: ReactNode }) {
       >
         <Link className="brand" href="/" onClick={() => setOpen(false)}>
           <span className="brand-mark">
-            <FlaskConical size={23} />
+            <PixelFlask />
           </span>
           <span>
             idea lab<span className="brand-dot">.</span>
@@ -137,14 +133,6 @@ export function Shell({ children }: { children: ReactNode }) {
           Idea analyst<span className="soon">SOON</span>
         </Link>
         <div className="sidebar-bottom">
-          <div className="lab-note">
-            <span className="little-star">✧</span>
-            <strong>A home for your next big thing.</strong>
-            <p>Connect the dots. Find your focus. Make something matter.</p>
-            <Link href="/ideas">
-              Explore your ideas <ArrowUpRight size={14} />
-            </Link>
-          </div>
           <Link
             className="nav-item"
             href="/settings"
@@ -157,14 +145,6 @@ export function Shell({ children }: { children: ReactNode }) {
             {dark ? <Sun size={17} /> : <Moon size={17} />}{" "}
             {dark ? "Light appearance" : "Dark appearance"}
           </button>
-          <div className="profile">
-            <span className="avatar">Y</span>
-            <div>
-              <strong>Your workspace</strong>
-              <small>Private workspace</small>
-            </div>
-            <CircleHelp size={17} />
-          </div>
         </div>
       </aside>
       <div className="workspace">
@@ -180,8 +160,8 @@ export function Shell({ children }: { children: ReactNode }) {
         </header>
         <main id="main">{children}</main>
         <footer className="footer">
-          <span>Good ideas deserve a place to grow.</span>
-          <span>Idea Lab / Foundation preview</span>
+          <span>Capture. Evaluate. Build.</span>
+          <span>Idea Lab</span>
         </footer>
       </div>
     </div>

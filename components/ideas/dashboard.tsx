@@ -1,4 +1,5 @@
 "use client";
+import { PixelLabScene } from "@/components/pixel-flask";
 import { useState } from "react";
 import { DeleteIdea } from "./delete-idea";
 import Link from "@/components/navigation-link";
@@ -51,14 +52,15 @@ export function Dashboard() {
     .slice(0, 2);
   return (
     <div className="page dashboard">
-      <div className="page-heading">
+      <div className="page-heading dashboard-heading">
         <div>
-          <div className="eyebrow">YOUR IDEAS, CONNECTED</div>
+          <div className="eyebrow">IDEA LAB / OVERVIEW</div>
           <h1>
-            A little space for big ideas<span>.</span>
+            Ideas in play<span>.</span>
           </h1>
-          <p>Capture the sparks. Connect the dots. Decide what’s next.</p>
+          <p>Capture ideas. Challenge assumptions. Choose what to build.</p>
         </div>
+        <PixelLabScene />
         <div className="action-row">
           <button
             className="site-secondary"
