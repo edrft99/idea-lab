@@ -87,12 +87,6 @@ export function Detail({ id }: { id: string }) {
                 >
                   Roundtable review
                 </Link>
-                <Link
-                  className="site-secondary"
-                  href={"/ideas/" + id + "/evaluate"}
-                >
-                  Manual evaluation
-                </Link>
               </>
             )}
             <button
