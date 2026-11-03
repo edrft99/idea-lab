@@ -648,3 +648,23 @@ body :is(.rt-excerpt-options label, .rt-brief-disclosure > summary) {
     scroll-behavior: auto !important;
   }
 }
+
+/* Report history belongs to the selected reviewer, below its assessment. */
+.rt-agent-history:not(:empty) {
+  margin-top: 24px;
+  padding-top: 18px;
+  border-top: 1px dashed var(--border);
+}
+.rt-agent-history .rt-history-picker {
+  margin-top: 0;
+  font-size: 11px;
+}
+.rt-agent-history .rt-history-picker select {
+  width: 100%;
+  max-width: 100%;
+}
+.rt-agent-history > [role="status"] {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}

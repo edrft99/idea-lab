@@ -1,11 +1,6 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
-import {
-  CheckCircle2,
-  RefreshCw,
-  ExternalLink,
-  LoaderCircle,
-} from "lucide-react";
+import { RefreshCw, LoaderCircle } from "lucide-react";
 import {
   useResource,
   requestData,
@@ -61,6 +56,16 @@ export function SavedReports({
   useEffect(() => {
     if (history.data) historyCallback.current(history.data);
   }, [history.data]);
+  const refreshed = useRef(new Set<string>());
+  useEffect(() => {
+    if (storage?.status === "saved") {
+      const runId = storage.report.snapshot.result.runId;
+      if (!refreshed.current.has(runId)) {
+        refreshed.current.add(runId);
+        history.refresh();
+      }
+    }
+  }, [storage, history.refresh]);
   const state = local?.runId === result?.runId ? local?.state : storage;
   const saved = result
     ? state?.status === "saved" &&
@@ -173,50 +178,12 @@ export function SavedReports({
   }
   const pending = !!result && !saved && (!state || working);
   return (
-    <section
-      className="panel rt-saved-reports"
-      aria-label="Saved roundtable assessments"
-    >
-      <div className="rt-save-heading">
-        <div>
-          <h2>
-            {saved ? (
-              <>
-                <CheckCircle2 size={18} />
-                Saved to Notion
-              </>
-            ) : pending ? (
-              <>
-                <LoaderCircle size={18} className="rt-spin" />
-                Saving assessment…
-              </>
-            ) : result ? (
-              "Automatic save needs attention"
-            ) : (
-              "Saved assessments"
-            )}
-          </h2>
-          <p>
-            {saved
-              ? "Automatically saved. This report will load when you reopen the idea; your active idea score is unchanged."
-              : pending
-                ? "Keeping this assessment’s scores, evidence and brief in Notion. No extra approval is needed."
-                : result
-                  ? "The reviewer completed, but its report is not confirmed saved. Retry or check storage only; The model will not run again."
-                  : "Completed assessments save automatically and appear here when you reopen an idea."}
-          </p>
-        </div>
-        {saved?.url && (
-          <a
-            href={saved.url}
-            className="text-link"
-            target="_blank"
-            rel="noreferrer"
-          >
-            Open in Notion <ExternalLink size={13} />
-          </a>
-        )}
-      </div>
+    <div className="rt-agent-history" aria-label={name + " saved assessments"}>
+      {pending && (
+        <p className="rt-agent-score-note" role="status">
+          <LoaderCircle size={14} className="rt-spin" /> Saving assessment…
+        </p>
+      )}
       {result && !saved && state && state.status !== "saved" && !working && (
         <div className="rt-save-warning">
           <p>{state.message}</p>
@@ -232,14 +199,6 @@ export function SavedReports({
               : "Retry automatic save"}
           </button>
         </div>
-      )}
-      {!result && reports?.length === 0 && (
-        <p className="rt-agent-score-note">
-          No saved {name} assessment for this idea yet.{" "}
-          {participant !== "gpt"
-            ? `Reuse the assessed brief below to request ${name}’s independent review.`
-            : "Prepare a brief below to start a review."}
-        </p>
       )}
       {stale && (
         <p className="rt-save-warning">
@@ -262,7 +221,7 @@ export function SavedReports({
       )}
       {!!reports?.length && (
         <label className="rt-history-picker">
-          View a saved assessment
+          View a saved {name} assessment
           <select
             disabled={busy || working}
             value={
@@ -300,6 +259,6 @@ export function SavedReports({
           {error}
         </p>
       )}
-    </section>
+    </div>
   );
 }
