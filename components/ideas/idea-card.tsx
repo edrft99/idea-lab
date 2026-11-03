@@ -26,7 +26,14 @@ export function IdeaCard({ idea }: { idea: Idea }) {
             ? Array.from(new Set(idea.sources.map((s) => s.system))).join(", ")
             : "No linked source"}
         </span>
-        <span className="score">
+        <span
+          className="score"
+          title={
+            idea.roundtableScore?.status === "ready"
+              ? "Provisional roundtable Potential score"
+              : "No current roundtable score"
+          }
+        >
           {idea.priorityScore ?? "—"}
           <small>/100</small>
         </span>

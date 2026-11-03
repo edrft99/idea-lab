@@ -975,8 +975,9 @@ function Roundtable({ idea }: { idea?: Idea }) {
                 </pre>
                 <p>
                   {name}’s completed assessment will be automatically saved to
-                  Notion. There is no extra save step. Idea text and active
-                  ranking remain unchanged; peer discussion comes later.
+                  Notion. There is no extra save step. The saved review
+                  contributes to the idea’s provisional Potential score. Peer
+                  discussion comes later.
                 </p>
                 <div className="action-row">
                   <button

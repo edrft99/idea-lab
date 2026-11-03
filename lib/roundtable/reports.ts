@@ -51,6 +51,31 @@ const plain = (p: any) =>
     .map((v: any) => v.plain_text ?? v.text?.content ?? "")
     .join("");
 export class RoundtableReports extends NotionRepository {
+  async scoreReports(ideaIds: string[], actor: string) {
+    const histories = new Map<string, SavedReport[] | null>(
+      ideaIds.map((id) => [id, []]),
+    );
+    if (!ideaIds.length) return histories;
+    await this.preflight();
+    // One paginated datasource query, rather than a Notion query per idea.
+    const rows = await this.query(this.config.reviews, {
+      property: "Classification Version",
+      rich_text: { equals: "roundtable-report-v1" },
+    });
+    for (const row of rows) {
+      const targets = (row.properties["Candidate Idea"]?.relation ?? [])
+        .map((v: any) => v.id)
+        .filter((id: string) => histories.has(id));
+      if (!targets.length) continue;
+      try {
+        const report = await this.decode(row, actor);
+        histories.get(report.snapshot.result.input.ideaId)?.push(report);
+      } catch {
+        for (const target of targets) histories.set(target, null);
+      }
+    }
+    return histories;
+  }
   async preflight() {
     await this.schema(this.config.reviews, types);
   }
@@ -200,8 +225,8 @@ export class RoundtableReports extends NotionRepository {
           type: "paragraph",
           paragraph: richText(
             snapshot.storageMode === "automatic"
-              ? "Automatically saved roundtable report. Model findings remain unapproved; the idea’s active score is unchanged."
-              : "Saved roundtable assessment. Viability scores and evidence are preserved in the snapshot; the idea’s active score is unchanged.",
+              ? "Automatically saved roundtable report. Current reports for the same brief contribute to the provisional Potential score; model findings remain unapproved."
+              : "Saved roundtable assessment. Viability scores and evidence are preserved in the snapshot and contribute to the provisional Potential score when current.",
           ),
         },
         {
@@ -293,6 +318,25 @@ export class RoundtableReportService {
       await this.confirmStored(report, actor);
     }
     return reports;
+  }
+  async scoreReports(ideaIds: string[], actor: string) {
+    const histories = await this.repository.scoreReports(ideaIds, actor);
+    for (const [id, reports] of histories) {
+      if (!reports) continue;
+      try {
+        const seen = new Set<string>();
+        for (const report of reports) {
+          if (seen.has(report.snapshot.result.runId))
+            throw new Error("Duplicate model run");
+          seen.add(report.snapshot.result.runId);
+          await this.proof(report.snapshot.result, actor);
+          await this.confirmStored(report, actor);
+        }
+      } catch {
+        histories.set(id, null);
+      }
+    }
+    return histories;
   }
   async preflight() {
     await this.repository.preflight();

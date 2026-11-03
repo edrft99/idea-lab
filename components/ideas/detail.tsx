@@ -1,4 +1,5 @@
 "use client";
+import { dimensions, labels, reviewerName } from "@/lib/roundtable/model";
 import Link from "@/components/navigation-link";
 import {
   ArrowLeft,
@@ -54,9 +55,13 @@ export function Detail({ id }: { id: string }) {
                 <small>/100</small>
               </strong>
               <span>
-                {idea.scoreAuthority === "manual-approved"
-                  ? "Manually approved"
-                  : (idea.scoreAuthority ?? "Not evaluated")}
+                {idea.roundtableScore?.status === "ready"
+                  ? `Provisional · ${idea.roundtableScore.reviewers.length} ${idea.roundtableScore.reviewers.length === 1 ? "reviewer" : "reviewers"}`
+                  : idea.roundtableScore?.status === "unavailable"
+                    ? "Roundtable unavailable"
+                    : idea.roundtableScore?.status === "incomplete"
+                      ? "More evidence needed"
+                      : "Awaiting roundtable review"}
               </span>
             </div>
           </div>
@@ -134,21 +139,48 @@ export function Detail({ id }: { id: string }) {
                 onSaved={refresh}
               />
               <section className="panel prose-panel">
-                <h2>Current score breakdown</h2>
-                <dl>
-                  {Object.entries(idea.scores).map(([k, v]) => (
-                    <div key={k}>
-                      <dt className="capitalize">
-                        {k === "alignment" ? "Strategic alignment" : k}
-                      </dt>
-                      <dd>{v === null ? "Unrated" : v + "/5"}</dd>
-                    </div>
-                  ))}
-                </dl>
-                <p className="subtle-note">
-                  Editing this idea does not change evaluation scores or
-                  manually approved assessments.
-                </p>
+                <h2>Roundtable score breakdown</h2>
+                {idea.roundtableScore?.status === "ready" ? (
+                  <>
+                    <dl>
+                      {dimensions.map((key) => (
+                        <div key={key}>
+                          <dt>{labels[key]}</dt>
+                          <dd>{idea.roundtableScore!.ratings[key]}/100</dd>
+                        </div>
+                      ))}
+                    </dl>
+                    <p>
+                      Reviewers:{" "}
+                      {idea.roundtableScore.reviewers
+                        .map(reviewerName)
+                        .join(", ")}
+                      .
+                    </p>
+                    <p className="subtle-note">
+                      Each reviewer’s total averages feasibility, success and
+                      value. Potential score averages those totals with equal
+                      weight, rounded once. Only the latest saved review from
+                      each agent for the same brief and current idea version
+                      counts. This is provisional, before peer discussion.
+                    </p>
+                    {idea.roundtableScore.assessedReviewers.length >
+                      idea.roundtableScore.reviewers.length && (
+                      <p className="subtle-note">
+                        Reviewers with unknown scores are excluded until all
+                        three dimensions are assessed.
+                      </p>
+                    )}
+                  </>
+                ) : (
+                  <p className="subtle-note">
+                    {idea.roundtableScore?.status === "unavailable"
+                      ? "Saved roundtable scores could not be verified. Refresh to try again; existing reports are preserved."
+                      : idea.roundtableScore?.status === "incomplete"
+                        ? "The latest brief has no reviewer with all three scores yet. Unknown scores stay unranked."
+                        : "Run a roundtable review for the current idea version to create its Potential score. Earlier reports remain in each agent’s history."}
+                  </p>
+                )}
               </section>
               <section className="panel prose-panel">
                 <h2>Where this idea came from</h2>

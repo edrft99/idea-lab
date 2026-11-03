@@ -1,9 +1,11 @@
+import { scoredIdeas } from "@/lib/roundtable/scored-ideas";
+import { filterIdeas } from "@/lib/ideas/domain";
 import { authorizeOwner, repository } from "@/lib/ideas/access";
 import { errorResponse } from "@/lib/ideas/errors";
 export const dynamic = "force-dynamic";
 export async function GET() {
   try {
-    await authorizeOwner();
+    const user = await authorizeOwner();
     const repo = repository();
     const [ideas, reviews] = await Promise.allSettled([
       repo.list({ sort: "score" }),
@@ -13,7 +15,9 @@ export async function GET() {
     return Response.json(
       {
         data: {
-          ideas: ideas.value,
+          ideas: filterIdeas(await scoredIdeas(ideas.value, user.userId), {
+            sort: "score",
+          }),
           reviews: reviews.status === "fulfilled" ? reviews.value : [],
           reviewUnavailable: reviews.status === "rejected",
         },
