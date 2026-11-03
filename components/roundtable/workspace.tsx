@@ -422,10 +422,6 @@ function Roundtable({ idea }: { idea?: Idea }) {
             pursuing.
           </p>
         </div>
-        <span className="rt-release">
-          <span />
-          GPT + Claude + Grok · independent reviewers
-        </span>
       </header>
       <ol className="rt-stages" aria-label="Review stages">
         <li aria-current="step">
@@ -452,46 +448,6 @@ function Roundtable({ idea }: { idea?: Idea }) {
           <LockKeyhole size={14} />
         </li>
       </ol>
-      {idea && (
-        <SavedReports
-          idea={idea}
-          participant={activeReviewer}
-          onHistory={(reports) => {
-            setResults((previous) => {
-              const next = { ...previous };
-              for (const reviewer of activeReviewers) {
-                if (next[reviewer]) continue;
-                const candidates = reports.filter(
-                  (row) => row.snapshot.result.participant === reviewer,
-                );
-                const report =
-                  candidates.find(
-                    (row) =>
-                      row.snapshot.result.input.inputRevision === idea.revision,
-                  ) ?? candidates[0];
-                if (report)
-                  next[reviewer] = resultSchema.parse(report.snapshot.result);
-              }
-              return next;
-            });
-          }}
-          onBusyChange={setSaving}
-          result={result}
-          storage={storage}
-          busy={busy || !!receipt || uncertain}
-          onLoad={(saved) => {
-            setResult(saved);
-            setStorage(null);
-            setRestored(false);
-            setSelected(saved.participant);
-            if (saved.input.inputRevision === idea.revision) {
-              setSelection(saved.input.selection);
-              setCriteria(saved.input.successCriteria);
-              setConstraints(saved.input.constraints);
-            }
-          }}
-        />
-      )}
       <div className="rt-layout">
         <section
           className="panel rt-table-panel"
@@ -717,6 +673,51 @@ function Roundtable({ idea }: { idea?: Idea }) {
               >
                 Return to GPT <ArrowRight size={14} />
               </button>
+            </div>
+          )}
+          {idea && (
+            <div hidden={selected === "copilot"}>
+              <SavedReports
+                idea={idea}
+                participant={activeReviewer}
+                onHistory={(reports) => {
+                  setResults((previous) => {
+                    const next = { ...previous };
+                    for (const reviewer of activeReviewers) {
+                      if (next[reviewer]) continue;
+                      const candidates = reports.filter(
+                        (row) => row.snapshot.result.participant === reviewer,
+                      );
+                      const report =
+                        candidates.find(
+                          (row) =>
+                            row.snapshot.result.input.inputRevision ===
+                            idea.revision,
+                        ) ?? candidates[0];
+                      if (report)
+                        next[reviewer] = resultSchema.parse(
+                          report.snapshot.result,
+                        );
+                    }
+                    return next;
+                  });
+                }}
+                onBusyChange={setSaving}
+                result={result}
+                storage={storage}
+                busy={busy || !!receipt || uncertain}
+                onLoad={(saved) => {
+                  setResult(saved);
+                  setStorage(null);
+                  setRestored(false);
+                  setSelected(saved.participant);
+                  if (saved.input.inputRevision === idea.revision) {
+                    setSelection(saved.input.selection);
+                    setCriteria(saved.input.successCriteria);
+                    setConstraints(saved.input.constraints);
+                  }
+                }}
+              />
             </div>
           )}
         </aside>
@@ -1061,16 +1062,6 @@ function Roundtable({ idea }: { idea?: Idea }) {
           {message}
         </p>
       )}
-      <footer className="rt-roadmap">
-        <span>
-          <UsersRound size={17} /> BUILT FOR MORE PERSPECTIVES
-        </span>
-        <p>
-          Connect GPT, Claude and Grok for independent reviews. GitHub Copilot
-          is next. Each will bring an independent view before reviewing the
-          others.
-        </p>
-      </footer>
     </div>
   );
 }
