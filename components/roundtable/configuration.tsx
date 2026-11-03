@@ -65,8 +65,8 @@ export function RoundtableConfiguration() {
           </details>
         </>
       )}
-      <Link className="text-link" href="/roundtable">
-        Open the roundtable →
+      <Link className="text-link" href="/ideas">
+        Choose an idea to open its roundtable →
       </Link>
       <AdditionalConfiguration reviewer="claude" />
       <AdditionalConfiguration reviewer="grok" />

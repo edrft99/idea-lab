@@ -1,5 +1,4 @@
-import { RoundtableWorkspace } from "@/components/roundtable/workspace";
-export const metadata = { title: "Idea roundtable" };
+import { redirect } from "next/navigation";
 export default function Page() {
-  return <RoundtableWorkspace />;
+  redirect("/ideas");
 }

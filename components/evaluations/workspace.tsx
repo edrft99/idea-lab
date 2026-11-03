@@ -63,14 +63,13 @@ const empty = (): DraftState => ({
 export function EvaluationWorkspace({ id }: { id?: string }) {
   return (
     <>
-      <div className="page" style={{ paddingBottom: 0 }}>
-        <Link
-          className="text-link"
-          href={id ? "/ideas/" + id + "/roundtable" : "/roundtable"}
-        >
-          Try the idea roundtable <span aria-hidden="true">→</span>
-        </Link>
-      </div>
+      {id && (
+        <div className="page" style={{ paddingBottom: 0 }}>
+          <Link className="text-link" href={"/ideas/" + id + "/roundtable"}>
+            Try the idea roundtable <span aria-hidden="true">→</span>
+          </Link>
+        </div>
+      )}
       {id ? <Bound key={id} id={id} /> : <Workbench />}
     </>
   );
