@@ -181,8 +181,8 @@ export function ReviewerAssessment({
         Download {name} report
       </button>
       <p className="rt-agent-score-note">
-        These provisional report scores do not replace your idea’s active
-        ranking. Panel consensus follows cross-review.
+        The latest saved reports for this brief contribute to your idea’s
+        provisional Potential score. Panel consensus follows cross-review.
       </p>
     </div>
   );

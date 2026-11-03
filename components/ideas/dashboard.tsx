@@ -87,6 +87,14 @@ export function Dashboard() {
         <Loading />
       ) : (
         <>
+          {ideas.some(
+            (idea) => idea.roundtableScore?.status === "unavailable",
+          ) && (
+            <p className="subtle-note" role="status">
+              Some saved roundtable scores could not be verified. Refresh to try
+              again; existing reports are preserved.
+            </p>
+          )}
           <div className="stats-grid">
             {[
               {
@@ -111,7 +119,7 @@ export function Dashboard() {
                   .length,
                 icon: TrendingUp,
                 color: "lilac",
-                note: "Potential score 80 or higher",
+                note: "Roundtable score 80 or higher",
               },
               {
                 label: "In motion",
@@ -180,8 +188,8 @@ export function Dashboard() {
                   </p>
                 )}
                 <p className="recommendation-note">
-                  Potential, effort and readiness are separate. This ranking
-                  uses saved scores; no AI evaluation was run.
+                  Provisional Potential scores average saved roundtable reviews
+                  for the same brief. Effort and readiness stay separate.
                 </p>
               </section>
               <div className="dashboard-columns">

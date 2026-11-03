@@ -132,6 +132,7 @@ export interface Evaluation {
   url: string | null;
 }
 export interface Idea extends EditableIdea {
+  roundtableScore?: import("../roundtable/score").RoundtableScore;
   id: string;
   url: string | null;
   createdAt: string;

@@ -611,3 +611,47 @@ describe("Grok report storage and generation", () => {
     ).toBe("failed");
   });
 });
+
+describe("verified score history reads", () => {
+  it("loads reports for multiple ideas with one collection query and validates source operations", async () => {
+    const { service, result, calls } = await setup();
+    expect((await service.autoSave(result, "owner")).status).toBe("saved");
+    calls.length = 0;
+    const second = "90000000-0000-4000-8000-000000000009";
+    const reports = await service.scoreReports([idea.id, second], "owner");
+    expect(reports.get(idea.id)?.[0].snapshot.result).toEqual(result);
+    expect(reports.get(second)).toEqual([]);
+    expect(calls.filter((c) => c.path.endsWith("/query"))).toHaveLength(1);
+    expect(calls.some((c) => c.path === "pages" || c.method === "PATCH")).toBe(
+      false,
+    );
+  });
+  it("isolates a corrupt report so another idea can still be ranked", async () => {
+    const { service, result, rows } = await setup();
+    await service.autoSave(result, "owner");
+    const second = "90000000-0000-4000-8000-000000000009";
+    const corrupt = structuredClone(rows[0]);
+    corrupt.properties["Candidate Idea"] = { relation: [{ id: second }] };
+    rows.push(corrupt);
+    const reports = await service.scoreReports([idea.id, second], "owner");
+    expect(reports.get(idea.id)).toHaveLength(1);
+    expect(reports.get(second)).toBeNull();
+  });
+  it("refuses duplicate runs and mismatched ledger provenance", async () => {
+    const { service, result, rows, ops } = await setup();
+    await service.autoSave(result, "owner");
+    rows.push(structuredClone(rows[0]));
+    expect(
+      (await service.scoreReports([idea.id], "owner")).get(idea.id),
+    ).toBeNull();
+    rows.pop();
+    const read = ops.readById.bind(ops);
+    vi.spyOn(ops, "readById").mockImplementation(async (id, actor) => {
+      const op = await read(id, actor);
+      return id === result.runId ? { ...op, result_id: "0".repeat(64) } : op;
+    });
+    expect(
+      (await service.scoreReports([idea.id], "owner")).get(idea.id),
+    ).toBeNull();
+  });
+});

@@ -74,18 +74,17 @@ export default function Page() {
       </section>
       <section className="panel prose-panel mt-panel">
         <h2>Potential scoring</h2>
-        <Link className="text-link" href="/evaluations">
-          Open scoring workbench
-        </Link>
         <p>
-          Impact 30% · Alignment 25% · Feasibility 20% · Reusability 15% ·
-          Timing 10%.
+          Potential score comes from saved roundtable reports. Average each
+          reviewer’s feasibility, success and value scores, then average the
+          reviewer totals with equal weight. Round the final result to 0–100.
         </p>
         <p>
-          Potential = Σ ((rating − 1) × weight) × 25. Effort and readiness stay
-          separate. Manually approved evaluations append history and can replace
-          an active score only after review. AI assessment requires a separately
-          configured deployment and selected-content transmission consent.
+          The latest assessed brief for the current idea version selects the
+          group. Only each agent’s latest saved review for that brief counts;
+          unknown scores stay unranked. Historical and manual evaluations are
+          preserved separately. This is a provisional ranking before peer
+          discussion.
         </p>
       </section>
       <section className="panel prose-panel mt-panel">

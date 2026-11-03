@@ -27,8 +27,8 @@ export function RoundtableConfiguration() {
           <p>{r.data.gpt.profile?.retentionNotice}</p>
           <p>
             Each request requires review of the selected idea brief. Completed
-            reports save automatically to Notion; the idea’s active score stays
-            unchanged.
+            reports save automatically to Notion and contribute to the idea’s
+            provisional Potential score.
           </p>
         </>
       ) : (
