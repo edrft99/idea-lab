@@ -1,3 +1,4 @@
+import type { GrokConfig } from "../lib/roundtable/grok-config";
 import type { ClaudeConfig } from "../lib/roundtable/claude-config";
 import {
   RoundtableService,
@@ -18,7 +19,7 @@ import {
 } from "./roundtable-fixtures";
 import { reviewTypes } from "../lib/proposals/repository";
 afterEach(() => vi.restoreAllMocks());
-async function setup(participant: "gpt" | "claude" = "gpt") {
+async function setup(participant: "gpt" | "claude" | "grok" = "gpt") {
   const memory = memoryDB(),
     ops = new Operations(memory.db),
     rows: any[] = [],
@@ -92,7 +93,11 @@ async function setup(participant: "gpt" | "claude" = "gpt") {
     inputHash: await digest(JSON.stringify(roundtableCommand)),
     assessment,
     provider:
-      participant === "claude" ? "anthropic-messages" : gptConfig.provider,
+      participant === "grok"
+        ? "xai-chat-completions"
+        : participant === "claude"
+          ? "anthropic-messages"
+          : gptConfig.provider,
     model: gptConfig.deployment,
     resolvedModel: "synthetic-gpt-resolved",
     endpoint: gptConfig.endpoint,
@@ -441,14 +446,12 @@ describe("Claude report storage and generation", () => {
   it("generates once, automatically saves Claude’s scores and recovers them without another dispatch", async () => {
     const { service, repo, ops, calls } = await setup("claude");
     const provider = {
-      evaluate: vi
-        .fn()
-        .mockResolvedValue({
-          value: assessment,
-          resolvedModel: "synthetic-claude",
-          responseId: "msg_synthetic",
-          usage: null,
-        }),
+      evaluate: vi.fn().mockResolvedValue({
+        value: assessment,
+        resolvedModel: "synthetic-claude",
+        responseId: "msg_synthetic",
+        usage: null,
+      }),
     };
     const generation = new RoundtableService(
       claude,
@@ -514,6 +517,94 @@ describe("Claude report storage and generation", () => {
       (
         await service.autoSave(
           { ...result, participant: "claude", provider: "anthropic-messages" },
+          "owner",
+        )
+      ).status,
+    ).toBe("failed");
+  });
+});
+
+describe("Grok report storage and generation", () => {
+  const grok: GrokConfig = {
+    ...gptConfig,
+    provider: "xai-chat-completions",
+    endpoint: "https://api.x.ai/v1/",
+    deployment: "synthetic-grok",
+  };
+  it("generates once, automatically saves Grok’s scores and recovers them without another dispatch", async () => {
+    const { service, repo, ops, calls } = await setup("grok");
+    const provider = {
+      evaluate: vi.fn().mockResolvedValue({
+        value: assessment,
+        resolvedModel: "synthetic-grok",
+        responseId: "msg_synthetic",
+        usage: null,
+      }),
+    };
+    const generation = new RoundtableService(
+      grok,
+      repo,
+      ops,
+      provider,
+      service,
+    );
+    const receipt = await generation.prepare(roundtableCommand, "owner");
+    const response = await generation.execute(
+      receipt.command,
+      receipt.approvalToken,
+      "owner",
+    );
+    expect(response.result.participant).toBe("grok");
+    expect(response.result.input).toEqual(roundtableCommand);
+    expect(response.storage.status).toBe("saved");
+    expect((await ops.read(receipt.approvalToken, "owner")).action).toBe(
+      "roundtable-grok",
+    );
+    expect(await ops.countAIAttempts("owner", 0)).toBe(2);
+    expect(
+      (await new RoundtableReportService(repo, ops).list(idea.id, "owner"))[0]
+        .snapshot.result,
+    ).toEqual(response.result);
+    expect(
+      (
+        await generation.execute(
+          receipt.command,
+          receipt.approvalToken,
+          "owner",
+        )
+      ).result,
+    ).toEqual(response.result);
+    expect(
+      (
+        await roundtableRequestStatus(
+          ops,
+          receipt.approvalToken,
+          "owner",
+          service,
+        )
+      ).result,
+    ).toEqual(response.result);
+    expect(provider.evaluate).toHaveBeenCalledTimes(1);
+    expect(calls.filter((c) => c.path === "pages")).toHaveLength(1);
+    const gpt = new RoundtableService(gptConfig, repo, ops, provider, service);
+    await expect(
+      gpt.execute(receipt.command, receipt.approvalToken, "owner"),
+    ).rejects.toMatchObject({ code: "APPROVAL_CHANGED" });
+  });
+  it("reconciles an uncertain Grok save without repeating the write", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    const { service, result, lose, calls } = await setup("grok");
+    lose();
+    expect((await service.autoSave(result, "owner")).status).toBe("uncertain");
+    expect((await service.recover(result, "owner")).status).toBe("done");
+    expect(calls.filter((c) => c.path === "pages")).toHaveLength(1);
+  });
+  it("rejects relabeling a GPT run as a Grok result", async () => {
+    const { service, result } = await setup();
+    expect(
+      (
+        await service.autoSave(
+          { ...result, participant: "grok", provider: "xai-chat-completions" },
           "owner",
         )
       ).status,

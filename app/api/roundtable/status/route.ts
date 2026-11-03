@@ -1,6 +1,10 @@
 import { authorizeOwner } from "@/lib/ideas/access";
 import { errorResponse } from "@/lib/ideas/errors";
-import { gptProfile, claudeProfile } from "@/lib/roundtable/access";
+import {
+  gptProfile,
+  claudeProfile,
+  grokProfile,
+} from "@/lib/roundtable/access";
 export const dynamic = "force-dynamic";
 export async function GET() {
   try {
@@ -25,8 +29,18 @@ export async function GET() {
           "Claude needs a model, Anthropic API key and retention notice in protected site settings.",
       };
     }
+    let grok;
+    try {
+      grok = { enabled: true, profile: grokProfile() };
+    } catch {
+      grok = {
+        enabled: false,
+        message:
+          "Grok needs a model, xAI API key and retention notice in protected site settings.",
+      };
+    }
     return Response.json(
-      { data: { gpt, claude } },
+      { data: { gpt, claude, grok } },
       { headers: { "Cache-Control": "private, no-store" } },
     );
   } catch (error) {

@@ -166,13 +166,18 @@ export function RecentSaves() {
                               "ai-extract",
                               "roundtable-gpt",
                               "roundtable-claude",
+                              "roundtable-grok",
                             ].includes(op.action)
-                          ? ["roundtable-gpt", "roundtable-claude"].includes(
-                              op.action,
-                            )
-                            ? (op.action === "roundtable-claude"
-                                ? "Claude"
-                                : "GPT") + " roundtable assessment"
+                          ? [
+                              "roundtable-gpt",
+                              "roundtable-claude",
+                              "roundtable-grok",
+                            ].includes(op.action)
+                            ? (op.action === "roundtable-grok"
+                                ? "Grok"
+                                : op.action === "roundtable-claude"
+                                  ? "Claude"
+                                  : "GPT") + " roundtable assessment"
                             : op.action === "ai-extract"
                               ? "AI extraction request"
                               : "AI assessment request"
@@ -254,6 +259,7 @@ export function RecentSaves() {
                 "ai-extract",
                 "roundtable-gpt",
                 "roundtable-claude",
+                "roundtable-grok",
               ].includes(op.action) && (
                 <Link
                   className="text-link"

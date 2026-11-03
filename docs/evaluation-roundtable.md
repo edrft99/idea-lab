@@ -1,6 +1,6 @@
 # Evaluation roundtable: proposed implementation
 
-Status: target design and future delivery plan. The owner selected GitHub Copilot for the fourth seat and requested the UI followed by GPT first. The first implementation is documented in roundtable-gpt.md: the UI, GPT independent assessment and automatic Notion report storage are implemented; Claude independent review and shared brief reuse are documented in roundtable-claude.md; multi-provider cross-review remains a future phase.
+Status: target design and future delivery plan. The owner selected GitHub Copilot for the fourth seat and requested the UI followed by GPT first. The first implementation is documented in roundtable-gpt.md: the UI, GPT independent assessment and automatic Notion report storage are implemented; Claude and Grok independent reviews and shared brief reuse are documented in roundtable-claude.md and roundtable-grok.md; multi-provider cross-review remains a future phase.
 
 ## Experience
 

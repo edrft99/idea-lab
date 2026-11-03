@@ -41,6 +41,8 @@ import {
   requestSchema,
   resultSchema,
   rubricVersion,
+  activeReviewers,
+  reviewerName,
   type ActiveReviewer,
   type RoundtableRequest,
   type RoundtableResult,
@@ -175,8 +177,8 @@ function Roundtable({ idea }: { idea?: Idea }) {
     Partial<Record<ActiveReviewer, AutoSaveResult | null>>
   >({});
   const activeReviewer: ActiveReviewer =
-    selected === "claude" ? "claude" : "gpt";
-  const name = activeReviewer === "claude" ? "Claude" : "GPT";
+    selected === "copilot" ? "gpt" : selected;
+  const name = reviewerName(activeReviewer);
   const storage = storages[activeReviewer] ?? null;
   function setStorage(value: AutoSaveResult | null) {
     setStorages((previous) => ({ ...previous, [activeReviewer]: value }));
@@ -205,7 +207,7 @@ function Roundtable({ idea }: { idea?: Idea }) {
   const gpt = profile.data?.[activeReviewer],
     seat = seats.find((s) => s.id === selected)!;
   function state(id: string) {
-    if (id !== "gpt" && id !== "claude") return "Coming next";
+    if (id !== "gpt" && id !== "claude" && id !== "grok") return "Coming next";
     if (busy && receipt && id === activeReviewer) return "Reviewing…";
     if (results[id]) return "Assessment ready";
     if (uncertain && id === activeReviewer) return "Check request";
@@ -217,14 +219,15 @@ function Roundtable({ idea }: { idea?: Idea }) {
           ? "Checking connection…"
           : "Connection needed";
   }
+  const briefSource = results.gpt ?? results.claude ?? results.grok;
   function reuseGPTBrief() {
-    const previous = results.gpt;
+    const previous = results.gpt ?? results.claude ?? results.grok;
     if (!previous || locked) return;
     setSelection(previous.input.selection);
     setCriteria(previous.input.successCriteria);
     setConstraints(previous.input.constraints);
     setMessage(
-      "Reusing the exact brief assessed by GPT. Review it below before sending to Claude.",
+      `Reusing the exact brief assessed by ${reviewerName(previous.participant)}. Review it below before sending.`,
     );
   }
   async function prepare() {
@@ -397,7 +400,7 @@ function Roundtable({ idea }: { idea?: Idea }) {
   const selectedResult = result?.participant === selected ? result : null;
   function selectReviewer(id: ReviewerId) {
     if (locked) return;
-    if (id === "claude" && results.gpt) reuseGPTBrief();
+    if (id === "claude" || id === "grok") reuseGPTBrief();
     setSelected(id);
     reviewerPanel.current?.scrollTo({ top: 0 });
     if (window.matchMedia("(max-width: 760px)").matches)
@@ -421,7 +424,7 @@ function Roundtable({ idea }: { idea?: Idea }) {
         </div>
         <span className="rt-release">
           <span />
-          GPT + Claude · independent reviewers
+          GPT + Claude + Grok · independent reviewers
         </span>
       </header>
       <ol className="rt-stages" aria-label="Review stages">
@@ -429,7 +432,7 @@ function Roundtable({ idea }: { idea?: Idea }) {
           <span className="rt-stage-number">01</span>
           <div>
             <strong>Independent perspectives</strong>
-            <small>Independent assessments from GPT and Claude</small>
+            <small>Independent assessments from GPT, Claude and Grok</small>
           </div>
         </li>
         <li>
@@ -456,7 +459,7 @@ function Roundtable({ idea }: { idea?: Idea }) {
           onHistory={(reports) => {
             setResults((previous) => {
               const next = { ...previous };
-              for (const reviewer of ["gpt", "claude"] as const) {
+              for (const reviewer of activeReviewers) {
                 if (next[reviewer]) continue;
                 const candidates = reports.filter(
                   (row) => row.snapshot.result.participant === reviewer,
@@ -565,8 +568,7 @@ function Roundtable({ idea }: { idea?: Idea }) {
                 <small>
                   <i
                     className={
-                      (s.id === "gpt" || s.id === "claude") &&
-                      profile.data?.[s.id]?.enabled
+                      s.id !== "copilot" && profile.data?.[s.id]?.enabled
                         ? "ready"
                         : ""
                     }
@@ -601,14 +603,9 @@ function Roundtable({ idea }: { idea?: Idea }) {
           <div className="rt-section-label">
             <span>AT THIS SEAT</span>
             <span
-              className={
-                "rt-chip " +
-                (selected === "gpt" || selected === "claude" ? "active" : "")
-              }
+              className={"rt-chip " + (selected !== "copilot" ? "active" : "")}
             >
-              {selected === "gpt" || selected === "claude"
-                ? "INDEPENDENT REVIEWER"
-                : "COMING NEXT"}
+              {selected !== "copilot" ? "INDEPENDENT REVIEWER" : "COMING NEXT"}
             </span>
           </div>
           <span className={"rt-avatar rt-inspector-avatar " + seat.color}>
@@ -620,7 +617,7 @@ function Roundtable({ idea }: { idea?: Idea }) {
             <span className="rt-status-dot" />
             {state(selected)}
           </div>
-          {selected === "gpt" || selected === "claude" ? (
+          {selected !== "copilot" ? (
             <>
               {profile.error ? (
                 <Failure error={profile.error} retry={profile.refresh} />
@@ -628,11 +625,13 @@ function Roundtable({ idea }: { idea?: Idea }) {
                 <p className="rt-model-label">
                   Model <strong>{gpt.profile?.deployment}</strong>
                   <br />
-                  {gpt.profile?.provider === "anthropic-messages"
-                    ? "Anthropic Messages API"
-                    : gpt.profile?.provider === "openai-responses"
-                      ? "OpenAI Responses API"
-                      : "Azure OpenAI"}
+                  {gpt.profile?.provider === "xai-chat-completions"
+                    ? "xAI Chat Completions API"
+                    : gpt.profile?.provider === "anthropic-messages"
+                      ? "Anthropic Messages API"
+                      : gpt.profile?.provider === "openai-responses"
+                        ? "OpenAI Responses API"
+                        : "Azure OpenAI"}
                 </p>
               ) : (
                 <div className="rt-connection-note">
@@ -757,23 +756,27 @@ function Roundtable({ idea }: { idea?: Idea }) {
                   View idea <ArrowUpRight size={14} />
                 </Link>
               </div>
-              {activeReviewer === "claude" && results.gpt && (
-                <div className="rt-save-warning">
-                  <p>
-                    Reuse the same excerpts, success criteria, constraints and
-                    scoring rubric that GPT assessed. Claude receives an
-                    independent brief, without GPT’s answers.
-                  </p>
-                  <button
-                    type="button"
-                    className="site-secondary"
-                    disabled={locked}
-                    onClick={reuseGPTBrief}
-                  >
-                    Reuse GPT’s assessed brief
-                  </button>
-                </div>
-              )}
+              {(activeReviewer === "claude" || activeReviewer === "grok") &&
+                briefSource && (
+                  <div className="rt-save-warning">
+                    <p>
+                      Reuse the same excerpts, success criteria, constraints and
+                      scoring rubric that{" "}
+                      {reviewerName(briefSource.participant)} assessed. {name}{" "}
+                      receives an independent brief, without the other
+                      reviewers’ answers.
+                    </p>
+                    <button
+                      type="button"
+                      className="site-secondary"
+                      disabled={locked}
+                      onClick={reuseGPTBrief}
+                    >
+                      Reuse {reviewerName(briefSource.participant)}’s assessed
+                      brief
+                    </button>
+                  </div>
+                )}
               <fieldset disabled={locked} className="rt-fields">
                 <legend>Idea excerpts</legend>
                 <div className="rt-excerpt-options">
@@ -913,7 +916,9 @@ function Roundtable({ idea }: { idea?: Idea }) {
                       {receipt.profile.endpoint}
                       {receipt.profile.provider === "anthropic-messages"
                         ? "messages"
-                        : "responses"}
+                        : receipt.profile.provider === "xai-chat-completions"
+                          ? "chat/completions"
+                          : "responses"}
                     </dd>
                   </div>
                   <div>
@@ -1061,9 +1066,9 @@ function Roundtable({ idea }: { idea?: Idea }) {
           <UsersRound size={17} /> BUILT FOR MORE PERSPECTIVES
         </span>
         <p>
-          Connect GPT and Claude for independent reviews. Grok and GitHub
-          Copilot are next. Each will bring an independent view before reviewing
-          the others.
+          Connect GPT, Claude and Grok for independent reviews. GitHub Copilot
+          is next. Each will bring an independent view before reviewing the
+          others.
         </p>
       </footer>
     </div>

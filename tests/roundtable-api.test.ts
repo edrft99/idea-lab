@@ -79,6 +79,7 @@ describe("roundtable API boundary", () => {
     const body: any = await response.json();
     expect(body.data.gpt.enabled).toBe(false);
     expect(body.data.claude.enabled).toBe(false);
+    expect(body.data.grok.enabled).toBe(false);
   });
   it("returns only public connection metadata without contacting a provider", async () => {
     const fetcher = vi.spyOn(globalThis, "fetch");
@@ -172,4 +173,25 @@ describe("Claude connection boundary", () => {
       expect(fetcher).not.toHaveBeenCalled();
     },
   );
+});
+
+describe("Grok connection boundary", () => {
+  it("shows Grok availability only with protected model, key and policy configured", async () => {
+    const fetcher = vi.spyOn(globalThis, "fetch");
+    const response = await runWithIdeaRuntime(
+      {
+        ...env,
+        IDEA_LAB_GROK_MODEL: "synthetic-grok",
+        IDEA_LAB_GROK_API_KEY: "synthetic-xai-key",
+        IDEA_LAB_GROK_RETENTION_NOTICE: "Synthetic xAI account policy.",
+      },
+      () => connection(),
+    );
+    const body = (await response.json()) as any;
+    expect(body.data.grok.enabled).toBe(true);
+    expect(body.data.grok.profile.endpoint).toBe("https://api.x.ai/v1/");
+    expect(body.data.grok.profile.requestStorage).not.toContain("store=false");
+    expect(JSON.stringify(body)).not.toContain("synthetic-xai-key");
+    expect(fetcher).not.toHaveBeenCalled();
+  });
 });

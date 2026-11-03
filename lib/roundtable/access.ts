@@ -1,3 +1,5 @@
+import { grokConfig } from "./grok-config";
+import { GrokReviewer } from "./grok-provider";
 import { claudeConfig } from "./claude-config";
 import { ClaudeReviewer } from "./claude-provider";
 import type { ActiveReviewer } from "./model";
@@ -35,9 +37,21 @@ export function claudeProfile() {
     localRetention: gptReportRetention,
   };
 }
+export function grokProfile() {
+  return {
+    ...aiProfile(grokConfig(), promptVersion),
+    localRetention: gptReportRetention,
+  };
+}
 export function roundtableService(reviewer: ActiveReviewer = "gpt") {
-  const config = reviewer === "claude" ? claudeConfig() : gptConfig();
+  const config =
+    reviewer === "grok"
+      ? grokConfig()
+      : reviewer === "claude"
+        ? claudeConfig()
+        : gptConfig();
   const secrets = [
+    "IDEA_LAB_GROK_API_KEY",
     "IDEA_LAB_CLAUDE_API_KEY",
     "NOTION_TOKEN",
     "IDEA_LAB_AI_API_KEY",
@@ -49,9 +63,11 @@ export function roundtableService(reviewer: ActiveReviewer = "gpt") {
     config,
     new NotionRepository(notionConfig()),
     new Operations(operationalDB()),
-    config.provider === "anthropic-messages"
-      ? new ClaudeReviewer(config, fetch, secrets)
-      : new GPTReviewer(config, fetch, secrets),
+    config.provider === "xai-chat-completions"
+      ? new GrokReviewer(config, fetch, secrets)
+      : config.provider === "anthropic-messages"
+        ? new ClaudeReviewer(config, fetch, secrets)
+        : new GPTReviewer(config, fetch, secrets),
     roundtableReportService(),
     secrets,
   );

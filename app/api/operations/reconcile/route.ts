@@ -51,7 +51,11 @@ export async function POST(request: Request) {
       );
     return Response.json(
       {
-        data: ["roundtable-gpt", "roundtable-claude"].includes(operation.action)
+        data: [
+          "roundtable-gpt",
+          "roundtable-claude",
+          "roundtable-grok",
+        ].includes(operation.action)
           ? await roundtableRequestStatus(
               new Operations(operationalDB()),
               parsed.data.operationId,
@@ -82,6 +86,7 @@ export async function POST(request: Request) {
                       "ai-extract",
                       "roundtable-gpt",
                       "roundtable-claude",
+                      "roundtable-grok",
                     ].includes(operation.action)
                   ? aiRequestStatus(operation)
                   : operation.action.startsWith("assessment-")
